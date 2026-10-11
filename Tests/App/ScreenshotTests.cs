@@ -719,16 +719,44 @@ public class ScreenshotTests
         var window = Show(viewModel);
         await dialog.LoadAsync();
 
-        // Every engine that has it, newest first, whoever installed it.
+        // Every engine that has it, newest first, whoever installed it; the first one ticked to begin with.
         Assert.Equal(["Unreal Engine 5.7", "Unreal Engine 4.27"], dialog.Targets.Select(t => t.Title));
         Assert.All(dialog.Targets, t => Assert.Null(t.Badge)); // who installed it is in the note
-        Assert.Equal("Unreal Engine 5.7", dialog.SelectedTarget?.Title);
-        Assert.StartsWith("Deletes the plugin installed by the Epic Games Launcher", dialog.Note);
+        Assert.Equal(["Unreal Engine 5.7"], dialog.Chosen.Select(t => t.Title));
+        Assert.Equal(Lines("Deletes the plugin installed by the Epic Games Launcher.", "Projects that use the plugin won't find it any more."), dialog.Note);
         Assert.True(dialog.ConfirmCommand.CanExecute(null));
+
+        // From both: installed by different tools, so each line says which engines; what it means for projects, once.
+        dialog.Targets[1].IsChecked = true;
+        Assert.Equal(Lines("UE 5.7: Deletes the plugin installed by the Epic Games Launcher.", "UE 4.27: Deletes the plugin copied in by hand or by another tool.",
+            "Projects that use the plugin won't find it any more."), dialog.Note);
+        Assert.Equal("2 engines selected", dialog.ChosenText);
         Save(window, "fab-remove-plugin.png");
 
-        dialog.SelectedTarget = dialog.Targets[1];
+        dialog.Targets[0].IsChecked = false;
         Assert.StartsWith("Deletes the plugin copied in by hand", dialog.Note);
+        dialog.Targets[1].IsChecked = false;
+        Assert.Null(dialog.Note);
+        Assert.False(dialog.ConfirmCommand.CanExecute(null));
+    }
+
+    private static string Lines(params string[] lines) => string.Join(Environment.NewLine, lines);
+
+    /// <summary>EGL put it among the engine's own folders: its row can't be ticked, and the note says why with nothing else to say.</summary>
+    [AvaloniaFact]
+    public async Task A_plugin_that_cant_be_removed_says_why()
+    {
+        var viewModel = SampleMainViewModel();
+        SampleFab(viewModel, [new("UE_5.5", @"E:\Epic Games\UE_5.5", "Greybox_55", PluginSource.EGL, @"E:\Epic Games\UE_5.5\Engine\Plugins\Greybox", CanRemove: false)]);
+        var dialog = new FabActionViewModel(viewModel.Fab, viewModel.Fab.Items.Single(i => i.Title == "Greybox Tools"), FabActionMode.RemovePlugin);
+        await dialog.LoadAsync();
+
+        var row = Assert.Single(dialog.Targets);
+        Assert.Equal(("Remove with EGL", false), (row.Badge, row.CanCheck));
+        Assert.StartsWith("EGL put this plugin among the engine's own folders", row.BadgeTip);
+        Assert.Equal(row.BadgeTip, dialog.Note);
+        Assert.Empty(dialog.Chosen);
+        Assert.False(dialog.ConfirmCommand.CanExecute(null));
     }
 
     [AvaloniaFact]
@@ -894,7 +922,8 @@ public class ScreenshotTests
     }
 
     /// <summary>A small Fab library with vault copies on disk, so "downloaded" states are real.</summary>
-    private static void SampleFab(MainViewModel viewModel)
+    /// <param name="installs">The plugins installed into engines, instead of the usual Greybox Tools ones.</param>
+    private static void SampleFab(MainViewModel viewModel, List<FabInstall>? installs = null)
     {
         string vaultRoot = Path.Combine(Path.GetTempPath(), "unvault-screenshot-fab-vault");
         // Fab's current build of everything is "build-2"; Greybox Tools' 5.7 copies below are still on "build-1".
@@ -943,11 +972,11 @@ public class ScreenshotTests
         }
 
         // One EGL install, and one folder nothing has a record of (as found on a real machine).
-        var installs = new List<FabInstall>
-        {
+        installs ??=
+        [
             new("UE_5.7", @"E:\Epic Games\UE_5.7", "Greybox_57", PluginSource.EGL, @"E:\Epic Games\UE_5.7\Engine\Plugins\Marketplace\Greybox_57", CanRemove: true, BuildVersion: "build-1"),
             new("UE_4.27", @"E:\Epic Games\UE_4.27", "Greybox_427", PluginSource.Unlisted, @"E:\Epic Games\UE_4.27\Engine\Plugins\Marketplace\Greybox_427", CanRemove: true),
-        };
+        ];
 
         viewModel.Fab.SetItems(library, vault, installs);
     }

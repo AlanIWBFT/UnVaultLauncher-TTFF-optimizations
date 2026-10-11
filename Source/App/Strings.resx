@@ -976,10 +976,6 @@
     <value>ENGINES</value>
     <comment>Section heading over the engines to tick.</comment>
   </data>
-  <data name="SectionEngine" xml:space="preserve">
-    <value>ENGINE</value>
-    <comment>Section heading.</comment>
-  </data>
   <data name="EnginesChosen_One" xml:space="preserve">
     <value>{0:N0} engine selected</value>
   </data>
@@ -1124,13 +1120,21 @@
     <comment>EGL: the Epic Games Launcher.</comment>
   </data>
   <data name="RemovalByUnVault" xml:space="preserve">
-    <value>Deletes the plugin installed by UnVault Launcher. Projects that use the plugin won't find it any more.</value>
+    <value>Deletes the plugin installed by UnVault Launcher.</value>
   </data>
   <data name="RemovalByEGL" xml:space="preserve">
-    <value>Deletes the plugin installed by the Epic Games Launcher. Projects that use the plugin won't find it any more.</value>
+    <value>Deletes the plugin installed by the Epic Games Launcher.</value>
   </data>
   <data name="RemovalByOther" xml:space="preserve">
-    <value>Deletes the plugin copied in by hand or by another tool. Projects that use the plugin won't find it any more.</value>
+    <value>Deletes the plugin copied in by hand or by another tool.</value>
+  </data>
+  <data name="RemovalBreaksProjects" xml:space="preserve">
+    <value>Projects that use the plugin won't find it any more.</value>
+    <comment>On its own line, after who installed the plugin.</comment>
+  </data>
+  <data name="RemovalFrom" xml:space="preserve">
+    <value>UE {0}: {1}</value>
+    <comment>When the engines ticked had the plugin installed by different tools. {0}: engine versions, e.g. 5.7, 5.6; {1}: who installed it there, e.g. Deletes the plugin installed by the Epic Games Launcher.</comment>
   </data>
 
   <!-- Installed Plugins -->

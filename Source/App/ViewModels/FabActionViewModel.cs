@@ -43,7 +43,7 @@ public sealed partial class FabTargetViewModel(string title, string subtitle, st
     [NotifyPropertyChangedFor(nameof(Badge), nameof(IsAvailable), nameof(CanCheck))]
     public partial bool IsBusy { get; set; }
 
-    /// <summary>Ticked to go into, with any others ticked (install, add to project).</summary>
+    /// <summary>Ticked to go into or be removed from, with any others ticked.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanCheck))]
     public partial bool IsChecked { get; set; }
@@ -58,8 +58,8 @@ public sealed partial class FabTargetViewModel(string title, string subtitle, st
 public sealed record FabVersionOption(FabVersion Version, string Label);
 
 /// <summary>
-/// The dialog behind a Fab row's buttons: tick the engines (plugin) or projects (asset pack) it goes into, pick the
-/// version and folder for a new project / a plain download, or the engine to remove a plugin from.
+/// The dialog behind a Fab row's buttons: tick the engines (plugin) or projects (asset pack) it goes into, or the engines
+/// to remove a plugin from, or pick the version and folder for a new project / a plain download.
 /// </summary>
 public partial class FabActionViewModel : ViewModelBase, IShowsBusy
 {
@@ -97,19 +97,11 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
 
     public bool ShowsTargets => Mode is FabActionMode.InstallPlugin or FabActionMode.AddToProject or FabActionMode.RemovePlugin;
 
-    /// <summary>Installs and adds go into every engine or project ticked; a removal is from the one engine picked.</summary>
-    public bool ChoosesSeveral => Mode is FabActionMode.InstallPlugin or FabActionMode.AddToProject;
-    public bool ChoosesOne => Mode == FabActionMode.RemovePlugin;
     public bool ShowsVersionChoice => Mode is FabActionMode.CreateProject or FabActionMode.Download;
     public bool ShowsProjectLocation => Mode == FabActionMode.CreateProject;
     public bool CanBrowseProject => Mode == FabActionMode.AddToProject;
     public bool ShowsProjectSearch => Mode == FabActionMode.AddToProject;
-    public string TargetsHeading => Mode switch
-    {
-        FabActionMode.AddToProject => Strings.SectionProjects,
-        FabActionMode.InstallPlugin => Strings.SectionEngines,
-        _ => Strings.SectionEngine,
-    };
+    public string TargetsHeading => Mode == FabActionMode.AddToProject ? Strings.SectionProjects : Strings.SectionEngines;
 
     public ObservableCollection<FabTargetViewModel> Targets { get; } = [];
 
@@ -143,10 +135,6 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
-    public partial FabTargetViewModel? SelectedTarget { get; set; }
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     public partial FabVersionOption? SelectedVersion { get; set; }
 
     [ObservableProperty]
@@ -163,7 +151,6 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
 
     public bool HasNote => Note is not null;
 
-    partial void OnSelectedTargetChanged(FabTargetViewModel? value) => Note = value?.Install is { } install ? DescribeRemoval(install) : null;
     partial void OnSelectedVersionChanged(FabVersionOption? value) => Note = value is null ? null : DescribeSource(value.Version, 1);
 
     /// <summary>Listens to a target's tick, which changes the note, the count and Confirm.</summary>
@@ -180,12 +167,19 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
     private void OnChosenChanged()
     {
         var chosen = Chosen;
-        // Where each copy comes from, once per copy: projects on one engine version take the same.
-        var versions = chosen.Select(t => t.Version).OfType<FabVersion>().ToList();
-        int downloads = versions.Count(v => !v.IsDownloaded);
-        var notes = versions.DistinctBy(v => v.ArtifactID, StringComparer.OrdinalIgnoreCase)
-            .Select(v => DescribeSource(v, downloads)).OfType<string>().Distinct().ToList();
-        Note = notes.Count == 0 ? null : string.Join(Environment.NewLine, notes);
+        if (Mode == FabActionMode.RemovePlugin)
+        {
+            Note = DescribeRemoval(chosen);
+        }
+        else
+        {
+            // Where each copy comes from, once per copy: projects on one engine version take the same.
+            var versions = chosen.Select(t => t.Version).OfType<FabVersion>().ToList();
+            int downloads = versions.Count(v => !v.IsDownloaded);
+            var notes = versions.DistinctBy(v => v.ArtifactID, StringComparer.OrdinalIgnoreCase)
+                .Select(v => DescribeSource(v, downloads)).OfType<string>().Distinct().ToList();
+            Note = notes.Count == 0 ? null : string.Join(Environment.NewLine, notes);
+        }
         ChosenText = chosen.Count == 0 ? null
             : Mode == FabActionMode.AddToProject ? Localized.Plural(nameof(Strings.ProjectsChosen_Other), chosen.Count)
             : Localized.Plural(nameof(Strings.EnginesChosen_Other), chosen.Count);
@@ -238,12 +232,14 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
         EmptyText = Targets.Count == 0 ? Strings.NoInstalledEngines : !Targets.Any(t => t.IsUsable) ? Strings.PluginFitsNoEngine : null;
     }
 
-    /// <summary>The first engine it can go into is ticked to begin with, once: unticked by the user, it stays so.</summary>
+    /// <summary>
+    /// The first engine it can go into or be removed from is ticked to begin with, once: unticked by the user, it stays so.
+    /// </summary>
     private bool _ticked;
 
     /// <summary>
     /// Marks the engines an operation is working on, as they start and end while the dialog is open. A busy engine can't
-    /// be ticked or picked; one already chosen stays so (Confirm waits).
+    /// be ticked; one already ticked stays so (Confirm waits).
     /// </summary>
     public void UpdateBusy()
     {
@@ -252,13 +248,11 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
             if (target.EngineAppName is { } app)
                 target.IsBusy = _library.Owner.IsEngineBusy(app);
         }
-        if (Mode == FabActionMode.InstallPlugin && !_ticked && Targets.FirstOrDefault(t => t.IsAvailable) is { } first)
+        if (Mode != FabActionMode.AddToProject && !_ticked && Targets.FirstOrDefault(t => t.IsAvailable) is { } first)
         {
             first.IsChecked = true;
             _ticked = true;
         }
-        if (ChoosesOne)
-            SelectedTarget ??= Targets.FirstOrDefault(t => t.IsAvailable);
         ConfirmCommand.NotifyCanExecuteChanged();
     }
 
@@ -269,16 +263,21 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
         for (int i = 0; i < installs.Count; i++)
         {
             var install = installs[i];
-            // Removing works the same whoever installed it, so the note below says that; a badge only says why a row is off.
+            // Removing works the same whoever installed it, so the note below says who did; a badge only says why a row is off.
             string? badge = install.CanRemove ? null : Strings.BadgeRemoveWithEGL;
             string where = !install.CanRemove ? Strings.InstalledOutsideMarketplace
                 : sizes[i] > 0 ? $"{install.Folder}  ·  {ByteSize.Format(sizes[i])}"
                 : install.Folder;
-            Targets.Add(new FabTargetViewModel($"Unreal Engine {install.EngineAppName[3..]}", where,
-                badge, version: null, isUsable: install.CanRemove, engine: null, project: null) { Install = install, EngineAppName = install.EngineAppName });
+            Targets.Add(Tickable(new FabTargetViewModel($"Unreal Engine {install.EngineAppName[3..]}", where,
+                badge, version: null, isUsable: install.CanRemove, engine: null, project: null)
+            {
+                Install = install,
+                EngineAppName = install.EngineAppName,
+                BadgeTip = install.CanRemove ? null : Strings.RemovalAmongEngineFolders,
+            }));
         }
         UpdateBusy();
-        SelectedTarget ??= Targets.FirstOrDefault(); // nothing removable: the first row still says why
+        OnChosenChanged(); // nothing removable: the note says why
         EmptyText = Targets.Count == 0 ? Strings.PluginInNoEngine : null;
     }
 
@@ -429,9 +428,8 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
 
     private bool CanConfirm() => Mode switch
     {
-        FabActionMode.InstallPlugin or FabActionMode.AddToProject => Chosen is { Count: > 0 } chosen && chosen.All(t => t.IsAvailable),
+        FabActionMode.InstallPlugin or FabActionMode.AddToProject or FabActionMode.RemovePlugin => Chosen is { Count: > 0 } chosen && chosen.All(t => t.IsAvailable),
         FabActionMode.CreateProject => SelectedVersion is not null && !string.IsNullOrWhiteSpace(ProjectName) && Path.IsPathFullyQualified(ProjectParent),
-        FabActionMode.RemovePlugin => SelectedTarget is { IsAvailable: true, Install: not null },
         _ => SelectedVersion is not null,
     };
 
@@ -451,7 +449,7 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
                 _library.StartCreateProject(_item, SelectedVersion!.Version, Path.Combine(ProjectParent, ProjectName.Trim()));
                 break;
             case FabActionMode.RemovePlugin:
-                _library.StartRemove(_item.Title, _item.Key, SelectedTarget!.Install!);
+                _library.StartRemovals(_item.Title, _item.Key, [.. Chosen.Select(t => t.Install!)]);
                 break;
             default:
                 _library.StartDownload(_item, SelectedVersion!.Version);
@@ -475,9 +473,21 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
             _ => Strings.NoteDownloadsReady,
         };
 
-    private static string DescribeRemoval(FabInstall install) => !install.CanRemove
-        ? Strings.RemovalAmongEngineFolders
-        : install.Source switch
+    /// <summary>
+    /// Who installed it, once for the engines that share an answer; each line says which engines when they don't. With
+    /// nothing it can be removed from, why not.
+    /// </summary>
+    private string? DescribeRemoval(IReadOnlyList<FabTargetViewModel> chosen)
+    {
+        if (chosen.Count == 0)
+            return Targets.Count > 0 && !Targets.Any(t => t.IsUsable) ? Strings.RemovalAmongEngineFolders : null;
+        var bySource = chosen.GroupBy(t => t.Install!.Source).ToList();
+        var lines = bySource.Select(g => bySource.Count == 1 ? InstalledBy(g.Key)
+            : Localized.Format(Strings.RemovalFrom, string.Join(", ", g.Select(t => Short(t.Install!.EngineAppName))), InstalledBy(g.Key)));
+        return string.Join(Environment.NewLine, [.. lines, Strings.RemovalBreaksProjects]);
+    }
+
+    private static string InstalledBy(PluginSource source) => source switch
     {
         PluginSource.UnVault => Strings.RemovalByUnVault,
         PluginSource.EGL => Strings.RemovalByEGL,

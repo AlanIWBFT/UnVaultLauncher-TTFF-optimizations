@@ -465,16 +465,22 @@ public partial class FabLibraryViewModel : ViewModelBase
     /// <returns>The removal, already started, for anything that shows its outcome (Installed Plugins).</returns>
     internal OperationViewModel StartRemove(string title, string? itemKey, FabInstall install)
     {
-        string engine = install.EngineAppName[3..];
-        var removal = new OperationViewModel(Owner, title, new OperationAction(OperationKind.RemovePlugin, engine), async (operation, _, _) =>
+        var removal = Removal(title, itemKey, install);
+        Owner.StartOperation(removal);
+        return removal;
+    }
+
+    /// <summary>A removal from each engine, one after another (each its own operation, to retry on its own).</summary>
+    internal void StartRemovals(string title, string? itemKey, IReadOnlyList<FabInstall> installs) =>
+        Owner.StartOperations([.. installs.Select(install => Removal(title, itemKey, install))]);
+
+    private OperationViewModel Removal(string title, string? itemKey, FabInstall install) =>
+        new(Owner, title, new OperationAction(OperationKind.RemovePlugin, install.EngineAppName[3..]), async (operation, _, _) =>
         {
             operation.SetPhase(Strings.PhaseDeletingFiles);
             var removed = await Task.Run(() => FabWorkflow.UninstallPlugin(install.EngineDirectory, install.ArtifactID, folder: install.Folder));
             return Localized.Format(Strings.RemoveDetail, ByteSize.Format(removed.BytesFreed));
         }, engines: [install.EngineAppName], fabItemKey: itemKey);
-        Owner.StartOperation(removal);
-        return removal;
-    }
 
     /// <summary>The library or Vault Cache item an artifact belongs to; null when it's in neither (or the library hasn't loaded).</summary>
     internal FabItemViewModel? FindItem(string artifactID) =>

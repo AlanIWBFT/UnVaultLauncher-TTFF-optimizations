@@ -58,8 +58,8 @@
                     </StackPanel>
                 </StackPanel>
 
-                <!-- Install, add to project: as many as are ticked -->
-                <ScrollViewer Grid.Row="1" MaxHeight="340" IsVisible="{Binding ChoosesSeveral}">
+                <!-- Install, add to project, remove: as many as are ticked -->
+                <ScrollViewer Grid.Row="1" MaxHeight="340" IsVisible="{Binding ShowsTargets}">
                     <ItemsControl ItemsSource="{Binding Targets}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="vm:FabTargetViewModel">
@@ -84,25 +84,6 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </ScrollViewer>
-
-                <!-- Remove: from one engine -->
-                <ListBox Grid.Row="1" ItemsSource="{Binding Targets}" SelectedItem="{Binding SelectedTarget}" IsVisible="{Binding ChoosesOne}"
-                         Background="Transparent" MaxHeight="340">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="vm:FabTargetViewModel">
-                            <Grid ColumnDefinitions="*,Auto" Opacity="{Binding IsAvailable, Converter={x:Static vm:Converters.AvailableOpacity}}">
-                                <StackPanel Spacing="2">
-                                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
-                                    <TextBlock Text="{Binding Subtitle}" Classes="muted small" TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
-                                <Border Grid.Column="1" Classes="chip" VerticalAlignment="Center" Margin="8,0,0,0" ToolTip.Tip="{Binding BadgeTip}"
-                                        IsVisible="{Binding Badge, Converter={x:Static ObjectConverters.IsNotNull}}">
-                                    <TextBlock Text="{Binding Badge}" />
-                                </Border>
-                            </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
 
                 <StackPanel Grid.Row="2" Spacing="8" Margin="0,12,0,0">
                     <TextBlock Text="{Binding EmptyText}" Classes="muted" TextWrapping="Wrap"
