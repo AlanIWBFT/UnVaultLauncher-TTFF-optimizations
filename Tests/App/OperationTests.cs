@@ -9,7 +9,7 @@ namespace UnVault.App.Tests;
 
 /// <summary>
 /// Operations and the Downloads tab: two never work on the same engine or Library item at once (they'd write the same
-/// files), and what's done, paused or failed is told in the history.
+/// files), so one waits for the other; what's done, paused or failed is told in the history.
 /// </summary>
 public sealed class OperationTests : IDisposable
 {
@@ -31,16 +31,19 @@ public sealed class OperationTests : IDisposable
     private static OperationAction Does(OperationKind kind, string? target = null) => new(kind, target);
 
     /// <summary>An operation that works until it's paused. None completes here: a finished one refreshes from this PC.</summary>
+    private static OperationViewModel Endless(MainViewModel owner, string subject, OperationAction action, string[] engines, string? item = null) =>
+        new(owner, subject, action, async (_, _, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return null;
+        }, engines, item);
+
     private sealed class Started(MainViewModel owner, string subject, OperationAction action, string[] engines, string? item = null)
     {
-        public OperationViewModel Operation { get; } = Add(owner, new OperationViewModel(owner, subject, action,
-            async (_, _, cancellationToken) =>
-            {
-                await Task.Delay(Timeout.Infinite, cancellationToken);
-                return null;
-            }, engines, item));
+        public OperationViewModel Operation { get; } = Add(owner, Endless(owner, subject, action, engines, item));
 
-        public Task Run { get; private set; } = Task.CompletedTask;
+        /// <summary>Its latest run, also one it started by itself after waiting. It only ends once paused, or at once when it has to wait.</summary>
+        public Task Run => Operation.Run;
 
         private static OperationViewModel Add(MainViewModel owner, OperationViewModel operation)
         {
@@ -50,18 +53,21 @@ public sealed class OperationTests : IDisposable
 
         public Started Start()
         {
-            Run = Operation.RunAsync();
+            _ = Operation.RunAsync();
             return this;
         }
-
-        /// <summary>Not awaited: a run only ends once paused (one that has to wait returns at once).</summary>
-        public void Retry() => Run = Operation.RunAsync();
 
         public async Task PauseAsync()
         {
             Operation.PauseCommand.Execute(null);
             await Run;
         }
+    }
+
+    private static async Task PauseAsync(OperationViewModel operation)
+    {
+        operation.PauseCommand.Execute(null);
+        await operation.Run;
     }
 
     /// <summary>One that fails at once, as with a full disk.</summary>
@@ -83,20 +89,18 @@ public sealed class OperationTests : IDisposable
         var plugin = new Started(viewModel, "Greybox Tools", Does(OperationKind.InstallPlugin, "5.7"), ["UE_5.7"], "fab:greybox").Start();
         Assert.True(plugin.Run.IsCompleted, "it waits instead of starting");
 
-        Assert.Equal(OperationState.Running, modify.Operation.State);
-        Assert.Equal(OperationState.Cancelled, plugin.Operation.State); // never started; ready to retry
-        Assert.Equal("Another operation works on the same files: Unreal Engine 5.7 (Changing components). Retry once it's done.", plugin.Operation.Message);
+        Assert.Equal((OperationState.Running, OperationState.Waiting), (modify.Operation.State, plugin.Operation.State));
+        Assert.Equal("Starts once Unreal Engine 5.7 (Changing components) is done.", plugin.Operation.Message);
+        Assert.Equal("Installing into UE 5.7  ·  Waiting", plugin.Operation.ActionLine);
+        Assert.False(plugin.Operation.RetryCommand.CanExecute(null)); // nothing to resume: it starts by itself
         Assert.True(Busy(viewModel, "UE_5.7"));
 
-        // Retried too early: still waits. Once the other is done, it runs.
-        plugin.Retry();
-        Assert.Equal(OperationState.Cancelled, plugin.Operation.State);
+        // The other one ends (here paused): it starts.
         await modify.PauseAsync();
-        Assert.False(Busy(viewModel, "UE_5.7"));
-        plugin.Retry();
         Assert.Equal(OperationState.Running, plugin.Operation.State);
         Assert.True(Busy(viewModel, "UE_5.7"));
         await plugin.PauseAsync();
+        Assert.False(Busy(viewModel, "UE_5.7"));
     }
 
     [AvaloniaFact]
@@ -107,8 +111,56 @@ public sealed class OperationTests : IDisposable
         var add = new Started(viewModel, "Garden Pack", Does(OperationKind.AddToProject, "Hillside"), [], "fab:garden").Start();
         Assert.True(add.Run.IsCompleted, "it waits instead of starting");
 
-        Assert.Equal((OperationState.Running, OperationState.Cancelled), (download.Operation.State, add.Operation.State));
+        Assert.Equal((OperationState.Running, OperationState.Waiting), (download.Operation.State, add.Operation.State));
         await download.PauseAsync();
+        Assert.Equal(OperationState.Running, add.Operation.State);
+        await add.PauseAsync();
+    }
+
+    /// <summary>
+    /// A plugin installed into several engines at once: an operation each, on top of the list in the order picked, run one
+    /// after another. Each can be paused or put in the history on its own, waiting or not.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Operations_started_together_on_one_item_take_turns()
+    {
+        var viewModel = WithEngines();
+        var earlier = new Started(viewModel, "Unreal Engine 5.8", Does(OperationKind.InstallEngine), ["UE_5.8"]).Start();
+        OperationViewModel Install(string version) =>
+            Endless(viewModel, "Greybox Tools", Does(OperationKind.InstallPlugin, version), [$"UE_{version}"], "fab:greybox");
+        OperationViewModel[] installs = [Install("5.7"), Install("5.6"), Install("5.5")];
+        viewModel.StartOperations(installs);
+        var (first, second, third) = (installs[0], installs[1], installs[2]);
+
+        Assert.Equal([first, second, third, earlier.Operation], viewModel.Operations);
+        Assert.Equal([OperationState.Running, OperationState.Waiting, OperationState.Waiting], installs.Select(o => o.State));
+        Assert.Equal("Starts once Greybox Tools (Installing into UE 5.7) is done.", third.Message);
+        Assert.Equal(OperationState.Running, earlier.Operation.State); // works on other files
+
+        // The first one ends (here paused): the next in line starts, and the last one says it now waits for that one.
+        await PauseAsync(first);
+        Assert.Equal([OperationState.Cancelled, OperationState.Running, OperationState.Waiting], installs.Select(o => o.State));
+        Assert.Equal("Starts once Greybox Tools (Installing into UE 5.6) is done.", third.Message);
+
+        // Paused while waiting, it keeps out of the queue: nothing starts when the second one ends.
+        Assert.True(third.PauseCommand.CanExecute(null));
+        third.PauseCommand.Execute(null);
+        Assert.Equal((OperationState.Cancelled, "Resume"), (third.State, third.RetryText));
+        await PauseAsync(second);
+        Assert.All(installs, o => Assert.Equal(OperationState.Cancelled, o.State));
+
+        // Resumed while another runs on the item, it waits its turn again; put in the history meanwhile, it's paused there.
+        _ = third.RunAsync();
+        _ = first.RunAsync();
+        Assert.Equal((OperationState.Running, OperationState.Waiting), (third.State, first.State));
+        Assert.True(first.MoveToHistoryCommand.CanExecute(null));
+        first.MoveToHistoryCommand.Execute(null);
+        Assert.Equal(("Greybox Tools", "Install into UE 5.7 paused"), (viewModel.History[0].Name, viewModel.History[0].Line));
+        Assert.DoesNotContain(first, viewModel.Operations);
+
+        await PauseAsync(third);
+        await earlier.PauseAsync();
+        Assert.False(viewModel.HasRunningOperations);
     }
 
     /// <summary>An update of a plugin in several engines holds all of them, and one operation ending frees only its own.</summary>

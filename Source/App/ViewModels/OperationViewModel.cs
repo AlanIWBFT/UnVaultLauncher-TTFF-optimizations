@@ -9,7 +9,8 @@ using UnVault.Core.Util;
 
 namespace UnVault.App.ViewModels;
 
-public enum OperationState { Running, Completed, Failed, Cancelled }
+/// <summary>Cancelled is paused; Waiting hasn't started yet, as another operation works on the same files.</summary>
+public enum OperationState { Running, Completed, Failed, Cancelled, Waiting }
 
 /// <summary>
 /// One running job (install, modify, verify, repair) shown in the downloads panel. The work reports through
@@ -76,9 +77,18 @@ public partial class OperationViewModel : ViewModelBase
     [ObservableProperty] public partial string? Message { get; set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsRunning), nameof(IsFinished), nameof(CanRetry), nameof(IsFailed), nameof(IsSucceededOrCancelled), nameof(RetryText))]
+    [NotifyPropertyChangedFor(nameof(IsRunning), nameof(IsWaiting), nameof(CanPause), nameof(CanRetry), nameof(CanMoveToHistory),
+        nameof(IsFailed), nameof(IsPausedOrWaiting), nameof(RetryText))]
     [NotifyCanExecuteChangedFor(nameof(PauseCommand), nameof(RetryCommand), nameof(MoveToHistoryCommand))]
     public partial OperationState State { get; set; }
+
+    /// <summary>Its place among the waiting ones: they start in the order they began to wait.</summary>
+    internal long Turn { get; private set; }
+
+    private static long s_turns;
+
+    /// <summary>The latest run. It ends once the operation is done, paused or failed, or at once when it has to wait.</summary>
+    internal Task Run { get; private set; } = Task.CompletedTask;
 
     /// <summary>A next step offered when done, e.g. Repair after a verify; it goes with the operation into the history.</summary>
     public (string Text, Action Action)? FollowUp => Volatile.Read(ref _followUp) is { } offered ? (offered.Text, offered.Action) : null;
@@ -87,10 +97,12 @@ public partial class OperationViewModel : ViewModelBase
     private Offer? _followUp;
 
     public bool IsRunning => State == OperationState.Running;
-    public bool IsFinished => !IsRunning;
+    public bool IsWaiting => State == OperationState.Waiting;
     public bool IsFailed => State == OperationState.Failed;
-    public bool IsSucceededOrCancelled => State is OperationState.Completed or OperationState.Cancelled;
+    public bool IsPausedOrWaiting => State is OperationState.Cancelled or OperationState.Waiting;
+    public bool CanPause => State is OperationState.Running or OperationState.Waiting;
     public bool CanRetry => State is OperationState.Failed or OperationState.Cancelled;
+    public bool CanMoveToHistory => CanRetry || IsWaiting;
 
     /// <summary>Paused ones continue where they stopped; failed ones try again (which also continues, where it can).</summary>
     public string RetryText => IsFailed ? Strings.Retry : Strings.Resume;
@@ -113,16 +125,20 @@ public partial class OperationViewModel : ViewModelBase
     /// <summary>Offers a next step once done (callable from the work's background thread).</summary>
     public void OfferFollowUp(string text, Action action) => Volatile.Write(ref _followUp, new Offer(text, action));
 
-    public async Task RunAsync()
+    /// <summary>Starts it, or has it wait while another operation works on the same files.</summary>
+    public Task RunAsync() => Run = RunCoreAsync();
+
+    private async Task RunCoreAsync()
     {
         if (_work is not { } work)
             return;
-        // Checked at every start, a retry too: the screen offers nothing that's busy, but a retry or a dialog left open can
-        // still ask for it. It stays ready to retry once the other one is done.
+        // Checked at every start, a resume too: the screen offers nothing that's busy, but several targets picked at once, a
+        // resume or a dialog left open can still ask for it. It starts by itself once the other one ends.
         if (_owner.RunningOverlap(this) is { } other)
         {
-            if (State == OperationState.Running)
-                State = OperationState.Cancelled; // never started
+            if (State != OperationState.Waiting)
+                Turn = Interlocked.Increment(ref s_turns);
+            State = OperationState.Waiting;
             Phase = Strings.PhaseWaiting;
             Message = Localized.Format(Strings.WaitsForOther, other.Subject, other.Action.Running);
             return;
@@ -171,6 +187,7 @@ public partial class OperationViewModel : ViewModelBase
             MemoryRelief.Release();
         }
 
+        _owner.StartWaiting();
         if (State == OperationState.Completed)
         {
             _owner.MoveToHistory(this, OperationOutcome.Completed);
@@ -178,15 +195,30 @@ public partial class OperationViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Stops it; Resume continues where it left off.</summary>
-    [RelayCommand(CanExecute = nameof(IsRunning))]
-    private void Pause() => _cancellation?.Cancel();
+    /// <summary>Stops it, or keeps it from starting when its turn comes; Resume continues where it left off.</summary>
+    [RelayCommand(CanExecute = nameof(CanPause))]
+    private void Pause()
+    {
+        if (IsWaiting)
+        {
+            State = OperationState.Cancelled;
+            Phase = Strings.PhasePaused;
+            Message = Strings.StoppedRetry;
+        }
+        else
+        {
+            _cancellation?.Cancel();
+        }
+    }
 
     [RelayCommand(CanExecute = nameof(CanRetry))]
     private Task RetryAsync() => RunAsync();
 
-    /// <summary>Paused or failed and not to be resumed: into the history. What it wrote stays; starting it anew continues from there.</summary>
-    [RelayCommand(CanExecute = nameof(CanRetry))]
+    /// <summary>
+    /// Paused, failed or waiting, and not to be resumed: into the history. What it wrote stays; starting it anew continues from
+    /// there.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanMoveToHistory))]
     private void MoveToHistory()
     {
         _owner.MoveToHistory(this, IsFailed ? OperationOutcome.Failed : OperationOutcome.Paused);

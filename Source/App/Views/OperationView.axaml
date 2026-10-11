@@ -11,10 +11,10 @@
         <TextBlock Grid.Row="1" Text="{Binding ActionLine}" Classes="muted small" Margin="0,3,0,0" />
 
         <StackPanel Grid.Column="1" Grid.RowSpan="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0">
-            <Button Content="{x:Static s:Strings.Pause}" Command="{Binding PauseCommand}" IsVisible="{Binding IsRunning}" />
+            <Button Content="{x:Static s:Strings.Pause}" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}" />
             <Button Content="{Binding RetryText}" Classes="accent" Command="{Binding RetryCommand}" IsVisible="{Binding CanRetry}" />
             <!-- Not to be resumed: into the history. A square as tall as the button beside it. -->
-            <Button Command="{Binding MoveToHistoryCommand}" IsVisible="{Binding CanRetry}" VerticalAlignment="Stretch"
+            <Button Command="{Binding MoveToHistoryCommand}" IsVisible="{Binding CanMoveToHistory}" VerticalAlignment="Stretch"
                     Width="{Binding $self.Bounds.Height}" Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                     ToolTip.Tip="{x:Static s:Strings.MoveToHistory}" AutomationProperties.Name="{x:Static s:Strings.MoveToHistory}">
                 <Path Data="M0,0 L9,9 M9,0 L0,9" Stroke="{Binding $parent[Button].Foreground}" StrokeThickness="1.6" StrokeLineCap="Round" />
@@ -26,7 +26,7 @@
         <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="16" Margin="0,2,0,0">
             <TextBlock Text="{Binding ProgressText}" Classes="muted small" IsVisible="{Binding IsRunning}" />
             <TextBlock Text="{Binding SpeedText}" Classes="muted small" IsVisible="{Binding IsRunning}" />
-            <TextBlock Text="{Binding Message}" Classes="muted small" TextWrapping="Wrap" IsVisible="{Binding IsSucceededOrCancelled}" />
+            <TextBlock Text="{Binding Message}" Classes="muted small" TextWrapping="Wrap" IsVisible="{Binding IsPausedOrWaiting}" />
             <TextBlock Text="{Binding Message}" Classes="small" TextWrapping="Wrap" Foreground="{StaticResource DangerBrush}" IsVisible="{Binding IsFailed}" />
         </StackPanel>
     </Grid>

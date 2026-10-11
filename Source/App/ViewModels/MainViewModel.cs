@@ -402,6 +402,16 @@ public partial class MainViewModel : ViewModelBase
         Operations.FirstOrDefault(o => o != operation && o.IsRunning && o.Overlaps(operation));
 
     /// <summary>
+    /// An operation ended: the ones waiting for it start, in the order they began to wait. One that still can't (one just
+    /// started works on the same files) says what it waits for now.
+    /// </summary>
+    internal void StartWaiting()
+    {
+        foreach (var operation in Operations.Where(o => o.IsWaiting).OrderBy(o => o.Turn).ToList())
+            _ = operation.RunAsync();
+    }
+
+    /// <summary>
     /// An operation started or ended. Busy is worked out from all the running ones, not switched per operation: one ending
     /// mustn't free an engine another one is still working on.
     /// </summary>
@@ -595,10 +605,17 @@ public partial class MainViewModel : ViewModelBase
         }, [engine.AppName]));
     }
 
-    internal void StartOperation(OperationViewModel operation)
+    internal void StartOperation(OperationViewModel operation) => StartOperations([operation]);
+
+    /// <summary>On top of the list in the order given, and started in that order: those on the same files wait their turn.</summary>
+    internal void StartOperations(IReadOnlyList<OperationViewModel> operations)
     {
-        Operations.Insert(0, operation);
-        _ = operation.RunAsync();
+        // Each one listed as it starts: one not started yet counts as running, and an earlier one would wait for it.
+        for (int i = 0; i < operations.Count; i++)
+        {
+            Operations.Insert(i, operations[i]);
+            _ = operations[i].RunAsync();
+        }
     }
 
     internal async Task OnOperationCompletedAsync(OperationViewModel operation)

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -399,9 +400,12 @@ public partial class FabLibraryViewModel : ViewModelBase
         await dialog.LoadAsync();
     }
 
-    internal void StartPluginInstall(FabItemViewModel item, FabVersion version, LocalEngine engine)
-    {
-        Owner.StartOperation(new OperationViewModel(Owner, item.Title, new OperationAction(OperationKind.InstallPlugin, engine.AppName[3..]), async (operation, status, cancellationToken) =>
+    /// <summary>An install into each engine, one after another (each its own operation, to pause or retry on its own).</summary>
+    internal void StartPluginInstall(FabItemViewModel item, IEnumerable<(FabVersion Version, LocalEngine Engine)> targets) =>
+        Owner.StartOperations([.. targets.Select(target => PluginInstall(item, target.Version, target.Engine))]);
+
+    private OperationViewModel PluginInstall(FabItemViewModel item, FabVersion version, LocalEngine engine) =>
+        new(Owner, item.Title, new OperationAction(OperationKind.InstallPlugin, engine.AppName[3..]), async (operation, status, cancellationToken) =>
         {
             if (version.IsDownloaded && !version.IsOutdated)
             {
@@ -416,18 +420,25 @@ public partial class FabLibraryViewModel : ViewModelBase
                 await FabWorkflow.InstallPluginAsync(source, artifact, engine.Directory, Owner.CreateInstaller(), status, cancellationToken);
             }
             return engine.Directory;
-        }, engines: [engine.AppName], fabItemKey: item.Key));
-    }
+        }, engines: [engine.AppName], fabItemKey: item.Key);
 
-    internal void StartAddToProject(FabItemViewModel item, FabVersion version, UnrealProject project)
+    /// <summary>
+    /// An add into each project, one after another. Projects on the same engine version take the same Vault Cache copy, which
+    /// the first of them downloads.
+    /// </summary>
+    internal void StartAddToProject(FabItemViewModel item, IEnumerable<(FabVersion Version, UnrealProject Project)> targets)
     {
-        Owner.StartOperation(new OperationViewModel(Owner, item.Title, new OperationAction(OperationKind.AddToProject, project.Name), async (operation, status, cancellationToken) =>
-        {
-            var entry = await EnsureInVaultAsync(item, version, operation, status, cancellationToken);
-            var copy = operation.BeginPhase(Strings.PhaseCopyingIntoProject);
-            int files = await FabWorkflow.AddToProjectAsync(entry, project.Directory, copy, cancellationToken);
-            return Localized.Plural(nameof(Strings.AddDetail_Other), files, project.Directory);
-        }, fabItemKey: item.Key));
+        var downloaded = new ConcurrentDictionary<string, VaultEntry>(StringComparer.OrdinalIgnoreCase); // by artifact
+        Owner.StartOperations([.. targets.Select(target => new OperationViewModel(Owner, item.Title,
+            new OperationAction(OperationKind.AddToProject, target.Project.Name), async (operation, status, cancellationToken) =>
+            {
+                var (version, project) = target;
+                if (!downloaded.TryGetValue(version.ArtifactID, out var entry))
+                    downloaded[version.ArtifactID] = entry = await EnsureInVaultAsync(item, version, operation, status, cancellationToken);
+                var copy = operation.BeginPhase(Strings.PhaseCopyingIntoProject);
+                int files = await FabWorkflow.AddToProjectAsync(entry, project.Directory, copy, cancellationToken);
+                return Localized.Plural(nameof(Strings.AddDetail_Other), files, project.Directory);
+            }, fabItemKey: item.Key))]);
     }
 
     internal void StartCreateProject(FabItemViewModel item, FabVersion version, string targetDirectory)

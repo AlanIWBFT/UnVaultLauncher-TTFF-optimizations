@@ -776,8 +776,8 @@
     <comment>In Installed Plugins, for a plugin whose install was paused or interrupted: installing it again continues it.</comment>
   </data>
   <data name="WaitsForOther" xml:space="preserve">
-    <value>Another operation works on the same files: {0} ({1}). Retry once it's done.</value>
-    <comment>{0}: what the other one works on (an engine or a Library item), {1}: what it does, e.g. Changing components.</comment>
+    <value>Starts once {0} ({1}) is done.</value>
+    <comment>An operation waiting for another one on the same engine or Library item. {0}: what the other one works on (an engine or a Library item), {1}: what it does, e.g. Changing components.</comment>
   </data>
   <data name="ProgressOf" xml:space="preserve">
     <value>{0} of {1}</value>
@@ -953,7 +953,7 @@
     <comment>{0}: a Fab plugin.</comment>
   </data>
   <data name="ActionTitleAddToProject" xml:space="preserve">
-    <value>Add {0} to a project</value>
+    <value>Add {0} to projects</value>
     <comment>{0}: a Fab asset pack.</comment>
   </data>
   <data name="ActionTitleCreateProject" xml:space="preserve">
@@ -968,13 +968,29 @@
     <value>Download {0}</value>
     <comment>{0}: a Fab item.</comment>
   </data>
-  <data name="SectionProject" xml:space="preserve">
-    <value>PROJECT</value>
-    <comment>Section heading.</comment>
+  <data name="SectionProjects" xml:space="preserve">
+    <value>PROJECTS</value>
+    <comment>Section heading over the projects to tick.</comment>
+  </data>
+  <data name="SectionEngines" xml:space="preserve">
+    <value>ENGINES</value>
+    <comment>Section heading over the engines to tick.</comment>
   </data>
   <data name="SectionEngine" xml:space="preserve">
     <value>ENGINE</value>
     <comment>Section heading.</comment>
+  </data>
+  <data name="EnginesChosen_One" xml:space="preserve">
+    <value>{0:N0} engine selected</value>
+  </data>
+  <data name="EnginesChosen_Other" xml:space="preserve">
+    <value>{0:N0} engines selected</value>
+  </data>
+  <data name="ProjectsChosen_One" xml:space="preserve">
+    <value>{0:N0} project selected</value>
+  </data>
+  <data name="ProjectsChosen_Other" xml:space="preserve">
+    <value>{0:N0} projects selected</value>
   </data>
   <data name="TargetsLookupFailed" xml:space="preserve">
     <value>Couldn't look for targets: {0}</value>
@@ -1089,8 +1105,13 @@
     <value>Already in your Vault Cache ({0} version): nothing to download.</value>
     <comment>{0}: an engine version, e.g. 5.7.</comment>
   </data>
-  <data name="NoteDownloadsAndAdds" xml:space="preserve">
+  <data name="NoteDownloadsAndAdds_One" xml:space="preserve">
     <value>Downloads into your Vault Cache and adds it to the project.</value>
+    <comment>The count of projects that take a downloaded copy isn't shown.</comment>
+  </data>
+  <data name="NoteDownloadsAndAdds_Other" xml:space="preserve">
+    <value>Downloads into your Vault Cache and adds it to the projects.</value>
+    <comment>The count of projects that take a downloaded copy isn't shown.</comment>
   </data>
   <data name="NoteDownloadsAndCreates" xml:space="preserve">
     <value>Downloads into your Vault Cache and creates the project.</value>

@@ -287,7 +287,7 @@ public class ScreenshotTests
         var tabs = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("tab")).ToList();
         var placesBefore = tabs.Select(t => t.Bounds).ToList();
 
-        // In progress: running, paused and failed, each with what can be done about it.
+        // In progress: running, waiting its turn, paused and failed, each with what can be done about it.
         static Task<string?> Nothing(OperationViewModel _, Core.Install.InstallStatus __, CancellationToken ___) => Task.FromResult<string?>(null);
         viewModel.Operations.Add(new OperationViewModel(viewModel, "Unreal Engine 5.8.3", new(OperationKind.InstallEngine), Nothing, ["UE_5.8"])
         {
@@ -297,6 +297,9 @@ public class ScreenshotTests
             ProgressText = "4.1 GB of 10.9 GB  ·  61 204/206 255 files",
             SpeedText = "48.2 MB/s  ·  2m left",
         });
+        viewModel.Operations.Add(new OperationViewModel(viewModel, "Street Vehicles", new(OperationKind.AddToProject, "Ridgeback"), Nothing, fabItemKey: "fab:street")
+            { State = OperationState.Waiting, Phase = "Waiting", Message = "Starts once Street Vehicles (Adding to Hillside) is done." });
+        Assert.Equal((true, false, true), (viewModel.Operations[1].PauseCommand.CanExecute(null), viewModel.Operations[1].CanRetry, viewModel.Operations[1].CanMoveToHistory));
         viewModel.Operations.Add(new OperationViewModel(viewModel, "Garden Pack", new(OperationKind.Download, "5.7"), Nothing, fabItemKey: "fab:garden")
             { State = OperationState.Cancelled, Phase = "Paused", Message = "Resume continues where it left off." });
         viewModel.Operations.Add(new OperationViewModel(viewModel, "Greybox Tools", new(OperationKind.InstallPlugin, "5.6"), Nothing, ["UE_5.6"])
@@ -741,41 +744,59 @@ public class ScreenshotTests
         await dialog.LoadAsync();
 
         // 5.7 already has it; 5.6 can use the downloaded copy; 4.27 has a version; 5.5 and 5.8 depend on what's listed.
-        Assert.Equal("Installed", dialog.Targets.Single(t => t.Title.EndsWith("5.7")).Badge);
-        Assert.Equal("Unreal Engine 5.6", dialog.SelectedTarget?.Title);
-        Assert.StartsWith("Already in your Vault Cache", dialog.Note);
-        Save(window, "fab-install-plugin.png");
+        var installed = dialog.Targets.Single(t => t.Title.EndsWith("5.7"));
+        Assert.Equal(("Installed", false), (installed.Badge, installed.CanCheck));
+        Assert.Equal(["Unreal Engine 5.6"], dialog.Chosen.Select(t => t.Title)); // the first it can go into, to begin with
+        Assert.Equal("1 engine selected", dialog.ChosenText);
+        Assert.StartsWith("Already in your Vault Cache (5.6 version)", dialog.Note);
 
-        // One that isn't downloaded yet just downloads into the engine: nothing to note.
+        // Several at once. One that isn't downloaded yet just downloads into the engine: nothing more to note.
         var notDownloaded = dialog.Targets.Single(t => t.Title.EndsWith("5.5"));
         Assert.Equal((true, false), (notDownloaded.IsAvailable, notDownloaded.Version?.IsDownloaded));
-        dialog.SelectedTarget = notDownloaded;
-        Assert.Null(dialog.Note);
+        notDownloaded.IsChecked = true;
+        Assert.Equal(["Unreal Engine 5.6", "Unreal Engine 5.5"], dialog.Chosen.Select(t => t.Title));
+        Assert.Equal("2 engines selected", dialog.ChosenText);
+        Assert.StartsWith("Already in your Vault Cache (5.6 version)", dialog.Note);
+        Assert.True(dialog.ConfirmCommand.CanExecute(null));
+        Save(window, "fab-install-plugin.png");
 
-        // An operation works on 5.5 meanwhile: it can't be installed into, the pick stays, and it's back once that ends.
+        // An operation works on 5.5 meanwhile: it can't be installed into, so Confirm waits; the tick stays, or can be taken off.
         var modify = new OperationViewModel(viewModel, "Unreal Engine 5.5", new(OperationKind.ModifyEngine), (_, _, _) => Task.FromResult<string?>(null), ["UE_5.5"]);
         viewModel.Operations.Add(modify); // listed as running, as an operation starts out
         viewModel.UpdateBusy();
-        Assert.Equal(("Busy with another operation", false), (notDownloaded.Badge, notDownloaded.IsAvailable));
-        Assert.Same(notDownloaded, dialog.SelectedTarget);
+        Assert.Equal(("Busy with another operation", false, true, true), (notDownloaded.Badge, notDownloaded.IsAvailable, notDownloaded.IsChecked, notDownloaded.CanCheck));
         Assert.False(dialog.ConfirmCommand.CanExecute(null));
         modify.State = OperationState.Completed;
         viewModel.UpdateBusy();
         Assert.Equal((null, true), (notDownloaded.Badge, notDownloaded.IsAvailable));
         Assert.True(dialog.ConfirmCommand.CanExecute(null));
+        modify.State = OperationState.Running; // again
+        viewModel.UpdateBusy();
+        notDownloaded.IsChecked = false;
+        Assert.False(notDownloaded.CanCheck);
+        Assert.Equal(["Unreal Engine 5.6"], dialog.Chosen.Select(t => t.Title));
+        Assert.True(dialog.ConfirmCommand.CanExecute(null));
+        modify.State = OperationState.Completed;
+        viewModel.UpdateBusy();
 
-        // Opened while every engine it fits is busy, nothing is picked; the first to be free is.
+        // Untick them all: nothing to confirm, and nothing ticks itself again.
+        dialog.Chosen.Single().IsChecked = false;
+        viewModel.UpdateBusy();
+        Assert.Equal((0, null), (dialog.Chosen.Count, dialog.ChosenText));
+        Assert.False(dialog.ConfirmCommand.CanExecute(null));
+
+        // Opened while every engine it fits is busy, nothing is ticked; the first to be free is.
         var update = new OperationViewModel(viewModel, "Greybox Tools", new(OperationKind.Update), (_, _, _) => Task.FromResult<string?>(null),
             [.. dialog.Targets.Where(t => t.IsUsable).Select(t => t.EngineAppName!)]);
         viewModel.Operations.Add(update);
         var waiting = new FabActionViewModel(viewModel.Fab, item, FabActionMode.InstallPlugin);
         viewModel.Dialog = waiting;
         await waiting.LoadAsync();
-        Assert.Null(waiting.SelectedTarget);
+        Assert.Empty(waiting.Chosen);
         Assert.Null(waiting.EmptyText); // they fit; they're only busy, as their badges say
         update.State = OperationState.Completed;
         viewModel.UpdateBusy();
-        Assert.Equal("Unreal Engine 5.6", waiting.SelectedTarget?.Title);
+        Assert.Equal(["Unreal Engine 5.6"], waiting.Chosen.Select(t => t.Title));
         Assert.True(waiting.ConfirmCommand.CanExecute(null));
     }
 
@@ -808,9 +829,9 @@ public class ScreenshotTests
             [Html5Engine.Trim('{', '}')] = new(Html5Engine, @"E:\Engines\Html5", "5.4"),
         });
 
-        // By name (case aside, numbers in order), and nothing chosen until the user picks a project.
+        // By name (case aside, numbers in order), and nothing ticked until the user picks projects.
         Assert.Equal(["arena_test", "Html5Port", "OldTown", "Project2", "Project10", "Prototype", "Ridgeback"], dialog.Targets.Select(t => t.Title));
-        Assert.Null(dialog.SelectedTarget);
+        Assert.Empty(dialog.Chosen);
         Assert.False(dialog.ConfirmCommand.CanExecute(null));
         FabTargetViewModel Row(string name) => dialog.Targets.Single(t => t.Title == name);
         Assert.Equal(@"UE 5.5  ·  D:\Projects\Project2", Row("Project2").Subtitle); // no "opened" date
@@ -826,22 +847,50 @@ public class ScreenshotTests
             (Row("Ridgeback").Badge, Row("Ridgeback").BadgeTip, Row("Ridgeback").IsAvailable));
         Assert.Equal(("Unsupported engine version", "This item is made for a newer 5.3 engine version.", false),
             (Row("OldTown").Badge, Row("OldTown").BadgeTip, Row("OldTown").IsAvailable));
-        Save(window, "fab-add-to-project.png");
-        dialog.SelectedTarget = Row("Project2");
-        Assert.True(dialog.ConfirmCommand.CanExecute(null));
+        Assert.False(Row("OldTown").CanCheck);
 
-        // The search narrows by name. It keeps the user's pick while it's listed, and never picks one itself.
+        // Several projects. Street Vehicles is one download for every engine, already in the Vault Cache: one note for both.
+        Row("Project2").IsChecked = true;
+        Assert.True(dialog.ConfirmCommand.CanExecute(null));
+        Row("Ridgeback").IsChecked = true;
+        Assert.Equal("Already in your Vault Cache (5.5 version): nothing to download.", dialog.Note);
+        Assert.Equal(["Project2", "Ridgeback"], dialog.Chosen.Select(t => t.Title));
+        Assert.Equal("2 projects selected", dialog.ChosenText);
+        Save(window, "fab-add-to-project.png");
+
+        // The search narrows by name, and never ticks or unticks: a ticked project it hides still counts.
         dialog.ProjectSearch = "project";
         Assert.Equal(["Project2", "Project10"], dialog.Targets.Select(t => t.Title));
-        Assert.Equal("Project2", dialog.SelectedTarget?.Title);
         dialog.ProjectSearch = "ridge";
         Assert.Equal("Ridgeback", Assert.Single(dialog.Targets).Title);
-        Assert.Null(dialog.SelectedTarget);
+        Assert.Equal(["Project2", "Ridgeback"], dialog.Chosen.Select(t => t.Title));
+        Assert.Equal("2 projects selected", dialog.ChosenText);
         dialog.ProjectSearch = "nothing like it";
         Assert.Empty(dialog.Targets);
         Assert.Equal("No projects match the search.", dialog.EmptyText);
+        Assert.True(dialog.ConfirmCommand.CanExecute(null));
         dialog.ClearProjectSearchCommand.Execute(null);
         Assert.Equal(7, dialog.Targets.Count);
+    }
+
+    /// <summary>The note says once that copies get downloaded, however many projects and versions take one.</summary>
+    [AvaloniaFact]
+    public void Adding_to_several_projects_tells_what_downloads_once()
+    {
+        var viewModel = SampleMainViewModel();
+        SampleFab(viewModel);
+        var item = viewModel.Fab.Items.Single(i => i.Title == "Hillside Village"); // a 5.5 and a 5.7 version, neither downloaded
+        var dialog = new FabActionViewModel(viewModel.Fab, item, FabActionMode.AddToProject);
+        dialog.ShowProjects([.. new[] { ("Ridgeback", "5.7"), ("Arena", "5.5"), ("Harbor", "5.5") }
+            .Select(p => new UnrealProject(p.Item1, $@"D:\Projects\{p.Item1}\{p.Item1}.uproject", p.Item2, null))]);
+        FabTargetViewModel Row(string name) => dialog.Targets.Single(t => t.Title == name);
+
+        Row("Arena").IsChecked = true;
+        Assert.Equal("Downloads into your Vault Cache and adds it to the project.", dialog.Note);
+        Row("Harbor").IsChecked = true;
+        Row("Ridgeback").IsChecked = true;
+        Assert.Equal("Downloads into your Vault Cache and adds it to the projects.", dialog.Note);
+        Assert.Equal("3 projects selected", dialog.ChosenText);
     }
 
     /// <summary>A small Fab library with vault copies on disk, so "downloaded" states are real.</summary>
