@@ -140,6 +140,44 @@
     <value>Options</value>
     <comment>Opens the window for changing an installed engine's components.</comment>
   </data>
+  <data name="InstallPrerequisites" xml:space="preserve">
+    <value>Install Prerequisites</value>
+    <comment>Engine menu item, and a button in the Downloads history after an engine install that didn't get them.</comment>
+  </data>
+  <data name="InstallPrerequisitesTip" xml:space="preserve">
+    <value>Runs the installer the engine comes with for what it needs on Windows, such as the Visual C++ runtime. It runs after an engine install by itself.</value>
+  </data>
+  <data name="PhaseInstallingPrerequisites" xml:space="preserve">
+    <value>Installing prerequisites</value>
+  </data>
+  <data name="ActionInstallPrerequisitesRunning" xml:space="preserve">
+    <value>Installing prerequisites</value>
+  </data>
+  <data name="ActionInstallPrerequisitesDone" xml:space="preserve">
+    <value>Prerequisites installed</value>
+  </data>
+  <data name="ActionInstallPrerequisitesName" xml:space="preserve">
+    <value>Prerequisites install</value>
+    <comment>As in "Prerequisites install failed: …".</comment>
+  </data>
+  <data name="PrerequisitesNotInstalled" xml:space="preserve">
+    <value>prerequisites not installed</value>
+    <comment>After an engine install's folder, in the Downloads history.</comment>
+  </data>
+  <data name="PrerequisitesNeedRestart" xml:space="preserve">
+    <value>restart Windows to finish installing prerequisites</value>
+    <comment>In the Downloads history, after an engine install's folder or on its own.</comment>
+  </data>
+  <data name="PrerequisitesDeclined" xml:space="preserve">
+    <value>Windows asked for permission to install them, and it was declined.</value>
+  </data>
+  <data name="PrerequisitesFailed" xml:space="preserve">
+    <value>The prerequisites installer ended with code {0}.</value>
+    <comment>{0}: its exit code, a number.</comment>
+  </data>
+  <data name="NoPrerequisites" xml:space="preserve">
+    <value>This engine's build names no prerequisites installer, or the installer isn't in the engine folder.</value>
+  </data>
   <data name="VerifyFiles" xml:space="preserve">
     <value>Verify Files</value>
   </data>

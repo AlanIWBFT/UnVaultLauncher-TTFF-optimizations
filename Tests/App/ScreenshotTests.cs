@@ -213,6 +213,7 @@ public class ScreenshotTests
         viewModel.UpdateCheck = UpdateCheckState.Available;
         Dispatcher.UIThread.RunJobs();
         Assert.True(pill.IsVisible);
+        Save(window, "app-update.png");
 
         version.Command!.Execute(null);
         var about = Assert.IsType<AboutViewModel>(viewModel.Dialog);

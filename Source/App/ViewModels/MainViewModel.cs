@@ -567,12 +567,60 @@ public partial class MainViewModel : ViewModelBase
 
     internal void StartInstall(string appName, string title, InstallSource source, IReadOnlySet<string> tags, string directory)
     {
+        bool installed = false; // paused while the prerequisites install, it resumes with them
         StartOperation(new OperationViewModel(this, title, new OperationAction(OperationKind.InstallEngine), async (operation, status, cancellationToken) =>
         {
-            var plan = InstallWorkflow.PlanInstall(source, tags);
-            operation.SetPhase(Strings.PhaseDownloading);
-            await InstallWorkflow.InstallAsync(source, plan, tags, null, directory, CreateInstaller(), status, register: true, cancellationToken);
-            return directory;
+            if (!installed)
+            {
+                var plan = InstallWorkflow.PlanInstall(source, tags);
+                operation.SetPhase(Strings.PhaseDownloading);
+                await InstallWorkflow.InstallAsync(source, plan, tags, null, directory, CreateInstaller(), status, register: true, cancellationToken);
+                installed = true;
+            }
+
+            // Then, as the Epic Games Launcher does, what the build names to run once installed (the Visual C++ runtime).
+            // Not getting it doesn't undo the install: the line says so, with a button to try again.
+            if (Prerequisite.Find(source.Manifest, directory) is not { } prerequisite)
+                return directory;
+            operation.SetPhase(Strings.PhaseInstallingPrerequisites);
+            var (outcome, _) = await prerequisite.RunAsync(cancellationToken);
+            if (outcome is PrerequisiteOutcome.Declined or PrerequisiteOutcome.Failed)
+                operation.OfferFollowUp(Strings.InstallPrerequisites, () => StartPrerequisites(appName, title, () => prerequisite));
+            return outcome switch
+            {
+                PrerequisiteOutcome.Installed => directory,
+                PrerequisiteOutcome.RestartNeeded => $"{directory}  ·  {Strings.PrerequisitesNeedRestart}",
+                _ => $"{directory}  ·  {Strings.PrerequisitesNotInstalled}",
+            };
+        }, [appName]));
+    }
+
+    /// <summary>Runs the prerequisite installer an engine's build names, for one installed without it.</summary>
+    internal void StartPrerequisites(EngineCardViewModel engine)
+    {
+        if (engine.Local is not { } local)
+            return;
+        StartPrerequisites(engine.AppName, engine.Title, () =>
+            local.Load() is { } install && Prerequisite.Find(install.Manifest, install.Directory) is { } found
+                ? found
+                : throw new InstallException(Strings.NoPrerequisites));
+    }
+
+    /// <param name="find">Finds the installer (on the work's thread, as it may read the manifest).</param>
+    private void StartPrerequisites(string appName, string title, Func<Prerequisite> find)
+    {
+        StartOperation(new OperationViewModel(this, title, new OperationAction(OperationKind.InstallPrerequisites), async (operation, _, cancellationToken) =>
+        {
+            var prerequisite = find();
+            operation.SetPhase(Strings.PhaseInstallingPrerequisites);
+            var (outcome, exitCode) = await prerequisite.RunAsync(cancellationToken);
+            return outcome switch
+            {
+                PrerequisiteOutcome.Installed => null,
+                PrerequisiteOutcome.RestartNeeded => Strings.PrerequisitesNeedRestart,
+                PrerequisiteOutcome.Declined => throw new InstallException(Strings.PrerequisitesDeclined),
+                _ => throw new InstallException(Localized.Format(Strings.PrerequisitesFailed, exitCode)),
+            };
         }, [appName]));
     }
 

@@ -194,7 +194,8 @@
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
-            <Setter Property="Padding" Value="18,5,18,6" />
+            <!-- A button's usual padding, spelled out: a tab's line (Views/TabMark) sits in the bottom of it -->
+            <Setter Property="Padding" Value="8,5,8,6" />
         </Style>
         <!-- The line under a tab (Views/TabMark), drawn like an engine card's edge: blue and moving while work runs, yellow
              while something there wants a look -->

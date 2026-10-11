@@ -327,6 +327,19 @@ public sealed class OperationTests : IDisposable
         Assert.Equal((true, "1 engine has an update"), (viewModel.HasEngineUpdates, viewModel.EngineUpdatesText));
     }
 
+    /// <summary>Prerequisites run on their own (from an engine's menu) say so in the history.</summary>
+    [Fact]
+    public void A_prerequisites_install_says_how_it_went()
+    {
+        HistoryEntryViewModel Entry(OperationOutcome outcome, string? message) =>
+            new(new OperationRecord("Unreal Engine 5.8.3", outcome, message, DateTimeOffset.Now) { Kind = OperationKind.InstallPrerequisites });
+        Assert.Equal("Prerequisites installed", Entry(OperationOutcome.Completed, null).Line);
+        Assert.Equal("Prerequisites installed  ·  restart Windows to finish installing prerequisites",
+            Entry(OperationOutcome.Completed, "restart Windows to finish installing prerequisites").Line);
+        Assert.Equal("Prerequisites install failed: Windows asked for permission to install them, and it was declined.",
+            Entry(OperationOutcome.Failed, "Windows asked for permission to install them, and it was declined.").Line);
+    }
+
     /// <summary>Entries saved before operations kept their parts hold a sentence each: they show as they were.</summary>
     [Fact]
     public void Older_history_entries_show_as_they_were_saved()

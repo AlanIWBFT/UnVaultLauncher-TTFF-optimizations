@@ -62,7 +62,7 @@ public partial class EngineCardViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsIdle))]
-    [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(ModifyCommand), nameof(VerifyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(ModifyCommand), nameof(VerifyCommand), nameof(InstallPrerequisitesCommand))]
     public partial bool IsBusy { get; set; }
 
     public bool IsIdle => !IsBusy;
@@ -75,6 +75,9 @@ public partial class EngineCardViewModel : ViewModelBase
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private void Verify() => _owner.StartVerify(this);
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private void InstallPrerequisites() => _owner.StartPrerequisites(this);
 
     [RelayCommand]
     private Task OpenPluginsAsync() => _owner.OpenInstalledPluginsAsync(this);

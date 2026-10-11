@@ -7,7 +7,7 @@ namespace UnVault.App.Services;
 
 public enum OperationOutcome { Completed, Paused, Failed }
 
-public enum OperationKind { InstallEngine, ModifyEngine, VerifyEngine, RepairEngine, InstallPlugin, AddToProject, CreateProject, Download, RemovePlugin, Update }
+public enum OperationKind { InstallEngine, ModifyEngine, VerifyEngine, RepairEngine, InstallPlugin, AddToProject, CreateProject, Download, RemovePlugin, Update, InstallPrerequisites }
 
 /// <summary>A finished operation, as the Downloads tab's history lists it.</summary>
 /// <param name="Title">What it worked on: an engine, a Library item. Entries saved before <see cref="Kind"/> was kept hold a sentence.</param>

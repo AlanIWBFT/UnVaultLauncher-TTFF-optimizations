@@ -34,6 +34,8 @@
                             <MenuFlyout>
                                 <MenuItem Header="{x:Static s:Strings.InstalledPlugins}" Command="{Binding OpenPluginsCommand}" />
                                 <MenuItem Header="{x:Static s:Strings.VerifyFiles}" Command="{Binding VerifyCommand}" />
+                                <MenuItem Header="{x:Static s:Strings.InstallPrerequisites}" Command="{Binding InstallPrerequisitesCommand}"
+                                          ToolTip.Tip="{x:Static s:Strings.InstallPrerequisitesTip}" />
                                 <MenuItem Header="{x:Static s:Strings.ShowInFolder}" Command="{Binding OpenFolderCommand}" />
                             </MenuFlyout>
                         </Button.Flyout>
