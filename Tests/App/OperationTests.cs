@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Headless.XUnit;
 using UnVault.App.Services;
 using UnVault.App.ViewModels;
@@ -6,7 +7,10 @@ using UnVault.Core.Install;
 
 namespace UnVault.App.Tests;
 
-/// <summary>Two operations never work on the same engine or Library item at once: they'd write the same files.</summary>
+/// <summary>
+/// Operations and the Downloads tab: two never work on the same engine or Library item at once (they'd write the same
+/// files), and what's done, paused or failed is told in the history.
+/// </summary>
 public sealed class OperationTests : IDisposable
 {
     /// <summary>A history of each test's own: a shared one would carry what one test leaves into the next.</summary>
@@ -24,10 +28,12 @@ public sealed class OperationTests : IDisposable
         return viewModel;
     }
 
+    private static OperationAction Does(OperationKind kind, string? target = null) => new(kind, target);
+
     /// <summary>An operation that works until it's paused. None completes here: a finished one refreshes from this PC.</summary>
-    private sealed class Started(MainViewModel owner, string title, string[] engines, string? item = null)
+    private sealed class Started(MainViewModel owner, string subject, OperationAction action, string[] engines, string? item = null)
     {
-        public OperationViewModel Operation { get; } = Add(owner, new OperationViewModel(owner, title,
+        public OperationViewModel Operation { get; } = Add(owner, new OperationViewModel(owner, subject, action,
             async (_, _, cancellationToken) =>
             {
                 await Task.Delay(Timeout.Infinite, cancellationToken);
@@ -58,19 +64,28 @@ public sealed class OperationTests : IDisposable
         }
     }
 
+    /// <summary>One that fails at once, as with a full disk.</summary>
+    private static async Task<OperationViewModel> FailedAsync(MainViewModel owner, string subject, OperationAction action, string[] engines)
+    {
+        var failed = new OperationViewModel(owner, subject, action, (_, _, _) => throw new InstallException("The disk is full."), engines);
+        owner.Operations.Insert(0, failed);
+        await failed.RunAsync();
+        return failed;
+    }
+
     private static bool Busy(MainViewModel viewModel, string app) => viewModel.Engines.Single(e => e.AppName == app).IsBusy;
 
     [AvaloniaFact]
     public async Task A_second_operation_on_the_same_engine_waits_for_the_first()
     {
         var viewModel = WithEngines();
-        var modify = new Started(viewModel, "Changing components of Unreal Engine 5.7", ["UE_5.7"]).Start();
-        var plugin = new Started(viewModel, "Installing Greybox Tools into UE 5.7", ["UE_5.7"], "fab:greybox").Start();
+        var modify = new Started(viewModel, "Unreal Engine 5.7", Does(OperationKind.ModifyEngine), ["UE_5.7"]).Start();
+        var plugin = new Started(viewModel, "Greybox Tools", Does(OperationKind.InstallPlugin, "5.7"), ["UE_5.7"], "fab:greybox").Start();
         Assert.True(plugin.Run.IsCompleted, "it waits instead of starting");
 
         Assert.Equal(OperationState.Running, modify.Operation.State);
         Assert.Equal(OperationState.Cancelled, plugin.Operation.State); // never started; ready to retry
-        Assert.Equal(@"""Changing components of Unreal Engine 5.7"" is working on the same files. Retry once it's done.", plugin.Operation.Message);
+        Assert.Equal("Another operation works on the same files: Unreal Engine 5.7 (Changing components). Retry once it's done.", plugin.Operation.Message);
         Assert.True(Busy(viewModel, "UE_5.7"));
 
         // Retried too early: still waits. Once the other is done, it runs.
@@ -88,8 +103,8 @@ public sealed class OperationTests : IDisposable
     public async Task Two_operations_on_one_Library_item_never_run_at_once()
     {
         var viewModel = WithEngines();
-        var download = new Started(viewModel, "Downloading Garden Pack", [], "fab:garden").Start();
-        var add = new Started(viewModel, "Adding Garden Pack to Hillside", [], "fab:garden").Start();
+        var download = new Started(viewModel, "Garden Pack", Does(OperationKind.Download, "5.7"), [], "fab:garden").Start();
+        var add = new Started(viewModel, "Garden Pack", Does(OperationKind.AddToProject, "Hillside"), [], "fab:garden").Start();
         Assert.True(add.Run.IsCompleted, "it waits instead of starting");
 
         Assert.Equal((OperationState.Running, OperationState.Cancelled), (download.Operation.State, add.Operation.State));
@@ -101,8 +116,8 @@ public sealed class OperationTests : IDisposable
     public async Task An_engine_stays_busy_until_the_last_operation_on_it_ends()
     {
         var viewModel = WithEngines();
-        var update = new Started(viewModel, "Updating Greybox Tools", ["UE_5.7", "UE_5.6"], "fab:greybox").Start();
-        var verify = new Started(viewModel, "Verifying Unreal Engine 5.5", ["UE_5.5"]).Start();
+        var update = new Started(viewModel, "Greybox Tools", Does(OperationKind.Update), ["UE_5.7", "UE_5.6"], "fab:greybox").Start();
+        var verify = new Started(viewModel, "Unreal Engine 5.5", Does(OperationKind.VerifyEngine), ["UE_5.5"]).Start();
         Assert.True(Busy(viewModel, "UE_5.7") && Busy(viewModel, "UE_5.6") && Busy(viewModel, "UE_5.5"));
 
         await verify.PauseAsync();
@@ -120,7 +135,7 @@ public sealed class OperationTests : IDisposable
         var viewModel = WithEngines();
         Assert.Equal(["UE_5.8"], viewModel.InstallableEngines.Select(e => e.AppName));
 
-        var install = new Started(viewModel, "Installing Unreal Engine 5.8", ["UE_5.8"]).Start();
+        var install = new Started(viewModel, "Unreal Engine 5.8", Does(OperationKind.InstallEngine), ["UE_5.8"]).Start();
         Assert.Empty(viewModel.InstallableEngines);
         await install.PauseAsync();
         Assert.Empty(viewModel.InstallableEngines); // waiting for Retry
@@ -129,40 +144,50 @@ public sealed class OperationTests : IDisposable
         Assert.Equal(["UE_5.8"], viewModel.InstallableEngines.Select(e => e.AppName));
     }
 
-    /// <summary>Done ones go into the history at once, with what they said; it's still there after a restart.</summary>
+    /// <summary>Beneath what it works on: what it does, and the step it's on unless that says the same.</summary>
+    [AvaloniaFact]
+    public void A_running_operation_says_what_it_does_and_its_step()
+    {
+        var viewModel = WithEngines();
+        var verify = new OperationViewModel(viewModel, "Unreal Engine 5.6", Does(OperationKind.VerifyEngine), (_, _, _) => Task.FromResult<string?>(null))
+            { Phase = "Reading manifest" };
+        Assert.Equal("Verifying  ·  Reading manifest", verify.ActionLine);
+        verify.Phase = "Verifying";
+        Assert.Equal("Verifying", verify.ActionLine);
+        Assert.Equal("Installing into UE 5.6  ·  Downloading",
+            new OperationViewModel(viewModel, "Greybox Tools", Does(OperationKind.InstallPlugin, "5.6"), (_, _, _) => Task.FromResult<string?>(null))
+                { Phase = "Downloading" }.ActionLine);
+    }
+
+    /// <summary>Done ones go into the history at once, saying what came of them; it's still there after a restart.</summary>
     [AvaloniaFact]
     public async Task A_finished_operation_goes_into_the_history_and_stays_there()
     {
         var viewModel = WithEngines();
         bool repaired = false;
-        var verify = new OperationViewModel(viewModel, "Verifying Unreal Engine 5.6", (operation, _, _) =>
+        var verify = new OperationViewModel(viewModel, "Unreal Engine 5.6", Does(OperationKind.VerifyEngine), (operation, _, _) =>
         {
             operation.OfferFollowUp("Repair", () => repaired = true);
-            return Task.FromResult<string?>("3 of 120 files are missing or damaged.");
+            return Task.FromResult<string?>("3 of 120 files missing or damaged");
         }, ["UE_5.6"]);
         viewModel.Operations.Insert(0, verify);
-        try
-        {
-            await verify.RunAsync();
+        await verify.RunAsync();
 
-            Assert.Empty(viewModel.Operations);
-            var entry = Assert.Single(viewModel.History);
-            Assert.Equal(("Verifying Unreal Engine 5.6", OperationOutcome.Completed, "3 of 120 files are missing or damaged."),
-                (entry.Title, entry.Record.Outcome, entry.Message));
-            // The next step it offered goes with it, once.
-            Assert.True(entry.HasFollowUp);
-            entry.RunFollowUpCommand.Execute(null);
-            Assert.True(repaired);
-            Assert.False(entry.HasFollowUp);
+        Assert.Empty(viewModel.Operations);
+        var entry = Assert.Single(viewModel.History);
+        Assert.Equal(("Unreal Engine 5.6", "Verified  ·  3 of 120 files missing or damaged", true), (entry.Name, entry.Line, entry.IsCompleted));
+        // The next step it offered goes with it, once.
+        Assert.True(entry.HasFollowUp);
+        entry.RunFollowUpCommand.Execute(null);
+        Assert.True(repaired);
+        Assert.False(entry.HasFollowUp);
 
-            var restarted = new MainViewModel(new AppServices(), _history);
-            Assert.Equal(["Verifying Unreal Engine 5.6"], restarted.History.Select(h => h.Title));
-            Assert.False(restarted.History[0].HasFollowUp); // what it would run isn't kept
-        }
-        finally
-        {
-            viewModel.ClearHistoryCommand.Execute(null);
-        }
+        var restarted = new MainViewModel(new AppServices(), _history);
+        var saved = Assert.Single(restarted.History);
+        Assert.Equal((entry.Name, entry.Line), (saved.Name, saved.Line));
+        Assert.False(saved.HasFollowUp); // what it would run isn't kept
+
+        viewModel.ClearHistoryCommand.Execute(null);
         Assert.Empty(new MainViewModel(new AppServices(), _history).History);
     }
 
@@ -171,29 +196,47 @@ public sealed class OperationTests : IDisposable
     public async Task Paused_and_failed_operations_wait_until_moved_to_the_history()
     {
         var viewModel = WithEngines();
-        var paused = new Started(viewModel, "Downloading Garden Pack", [], "fab:garden").Start();
+        var paused = new Started(viewModel, "Garden Pack", Does(OperationKind.Download, "5.7"), [], "fab:garden").Start();
         await paused.PauseAsync();
-        var failed = new OperationViewModel(viewModel, "Installing Greybox Tools into UE 5.7",
-            (_, _, _) => throw new InstallException("The disk is full."), ["UE_5.7"]);
-        viewModel.Operations.Insert(0, failed);
-        await failed.RunAsync();
+        var failed = await FailedAsync(viewModel, "Greybox Tools", Does(OperationKind.InstallPlugin, "5.7"), ["UE_5.7"]);
+
+        Assert.Equal(["Retry", "Resume"], viewModel.Operations.Select(o => o.RetryText));
+        Assert.Empty(viewModel.History);
+
+        paused.Operation.MoveToHistoryCommand.Execute(null);
+        failed.MoveToHistoryCommand.Execute(null);
+
+        Assert.Empty(viewModel.Operations);
+        Assert.Equal(
+            [("Greybox Tools", "Install into UE 5.7 failed: The disk is full.", true),
+             ("Garden Pack", "Download for UE 5.7 paused", false)],
+            viewModel.History.Select(h => (h.Name, h.Line, h.IsFailed)));
+    }
+
+    /// <summary>Nothing resumes after a restart, so closing the app puts what's unfinished into the history, newest on top.</summary>
+    [AvaloniaFact]
+    public async Task Closing_the_app_puts_unfinished_operations_into_the_history()
+    {
+        var viewModel = WithEngines();
+        var paused = new Started(viewModel, "Garden Pack", Does(OperationKind.Download, "5.7"), [], "fab:garden").Start();
+        await paused.PauseAsync();
+        await FailedAsync(viewModel, "Greybox Tools", Does(OperationKind.InstallPlugin, "5.7"), ["UE_5.7"]);
+        var running = new Started(viewModel, "Unreal Engine 5.8", Does(OperationKind.InstallEngine), ["UE_5.8"]).Start();
         try
         {
-            Assert.Equal(["Retry", "Resume"], viewModel.Operations.Select(o => o.RetryText));
-            Assert.Empty(viewModel.History);
-
-            paused.Operation.MoveToHistoryCommand.Execute(null);
-            failed.MoveToHistoryCommand.Execute(null);
+            viewModel.RecordUnfinished();
 
             Assert.Empty(viewModel.Operations);
             Assert.Equal(
-                [("Installing Greybox Tools into UE 5.7", OperationOutcome.Failed, "The disk is full."),
-                 ("Downloading Garden Pack", OperationOutcome.Paused, "Stopped before it finished.")],
-                viewModel.History.Select(h => (h.Title, h.Record.Outcome, h.Message)));
+                [("Unreal Engine 5.8", "Install paused"),
+                 ("Greybox Tools", "Install into UE 5.7 failed: The disk is full."),
+                 ("Garden Pack", "Download for UE 5.7 paused")],
+                viewModel.History.Select(h => (h.Name, h.Line)));
+            Assert.Equal(3, new MainViewModel(new AppServices(), _history).History.Count); // saved
         }
         finally
         {
-            viewModel.ClearHistoryCommand.Execute(null);
+            await running.PauseAsync();
         }
     }
 
@@ -202,10 +245,48 @@ public sealed class OperationTests : IDisposable
     {
         var viewModel = WithEngines();
         Assert.False(viewModel.HasRunningOperations);
-        var download = new Started(viewModel, "Downloading Garden Pack", [], "fab:garden").Start();
+        var download = new Started(viewModel, "Garden Pack", Does(OperationKind.Download, "5.7"), [], "fab:garden").Start();
         Assert.True(viewModel.HasRunningOperations);
         await download.PauseAsync();
         Assert.False(viewModel.HasRunningOperations); // paused: nothing is going on
+    }
+
+    /// <summary>Entries saved before operations kept their parts hold a sentence each: they show as they were.</summary>
+    [Fact]
+    public void Older_history_entries_show_as_they_were_saved()
+    {
+        var older = new HistoryEntryViewModel(new OperationRecord("Removing Edge Smoother from UE 5.5", OperationOutcome.Completed,
+            "Removed from UE 5.5; freed 12 MB.", DateTimeOffset.Now));
+        Assert.Equal(("Removing Edge Smoother from UE 5.5", "Removed from UE 5.5; freed 12 MB."), (older.Name, older.Line));
+    }
+
+    /// <summary>
+    /// Headings in the app's language, whatever Windows' regional format is: here an English interface with Russian
+    /// regional settings, which would otherwise give "четверг" and "20 сентября".
+    /// </summary>
+    [Fact]
+    public void History_is_grouped_by_day()
+    {
+        var (culture, language) = (CultureInfo.CurrentCulture, CultureInfo.CurrentUICulture);
+        CultureInfo.CurrentCulture = new CultureInfo("ru-RU");
+        CultureInfo.CurrentUICulture = new CultureInfo("en-US");
+        try
+        {
+            var today = new DateTime(2026, 10, 11); // a Sunday
+            Assert.Equal(
+                ["Today", "Yesterday", "Thursday", "September 20", "Wednesday, December 31, 2025"],
+                new[] { today, today.AddDays(-1), new DateTime(2026, 10, 8), new DateTime(2026, 9, 20), new DateTime(2025, 12, 31) }
+                    .Select(day => HistoryDayViewModel.HeadingFor(day, today)));
+
+            HistoryEntryViewModel At(DateTime when) =>
+                new(new OperationRecord("Garden Pack", OperationOutcome.Completed, null, new DateTimeOffset(when, TimeZoneInfo.Local.GetUtcOffset(when))));
+            var days = HistoryDayViewModel.Group([At(today.AddHours(15)), At(today.AddHours(9)), At(today.AddDays(-1).AddHours(20))], today);
+            Assert.Equal([("Today", 2), ("Yesterday", 1)], days.Select(d => (d.Heading, d.Entries.Count)));
+        }
+        finally
+        {
+            (CultureInfo.CurrentCulture, CultureInfo.CurrentUICulture) = (culture, language);
+        }
     }
 
     [Fact]
@@ -228,37 +309,6 @@ public sealed class OperationTests : IDisposable
         finally
         {
             File.Delete(path);
-        }
-    }
-
-    /// <summary>Nothing resumes after a restart, so closing the app puts what's unfinished into the history, newest on top.</summary>
-    [AvaloniaFact]
-    public async Task Closing_the_app_puts_unfinished_operations_into_the_history()
-    {
-        var viewModel = WithEngines();
-        var paused = new Started(viewModel, "Downloading Garden Pack", [], "fab:garden").Start();
-        await paused.PauseAsync();
-        var failed = new OperationViewModel(viewModel, "Installing Greybox Tools into UE 5.7",
-            (_, _, _) => throw new InstallException("The disk is full."), ["UE_5.7"]);
-        viewModel.Operations.Insert(0, failed);
-        await failed.RunAsync();
-        var running = new Started(viewModel, "Installing Unreal Engine 5.8", ["UE_5.8"]).Start();
-        try
-        {
-            viewModel.RecordUnfinished();
-
-            Assert.Empty(viewModel.Operations);
-            Assert.Equal(
-                [("Installing Unreal Engine 5.8", OperationOutcome.Paused, "Stopped before it finished."),
-                 ("Installing Greybox Tools into UE 5.7", OperationOutcome.Failed, "The disk is full."),
-                 ("Downloading Garden Pack", OperationOutcome.Paused, "Stopped before it finished.")],
-                viewModel.History.Select(h => (h.Title, h.Record.Outcome, h.Message)));
-            Assert.Equal(3, new MainViewModel(new AppServices(), _history).History.Count); // saved
-        }
-        finally
-        {
-            await running.PauseAsync();
-            viewModel.ClearHistoryCommand.Execute(null);
         }
     }
 }

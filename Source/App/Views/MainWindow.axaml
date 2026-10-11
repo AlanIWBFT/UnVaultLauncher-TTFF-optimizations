@@ -187,24 +187,33 @@
                                 IsVisible="{Binding HasHistory}" VerticalAlignment="Bottom" Margin="0,0,0,2" />
                     </Grid>
                     <TextBlock Text="{x:Static s:Strings.NoHistory}" Classes="muted" IsVisible="{Binding !HasHistory}" />
-                    <!-- One panel of rows rather than a card each: the history can be long -->
-                    <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
-                            CornerRadius="10" IsVisible="{Binding HasHistory}">
-                        <ItemsControl ItemsSource="{Binding History}">
-                            <ItemsControl.Styles>
-                                <Style Selector="ContentPresenter:nth-child(n+2) > Border.historyRow">
-                                    <Setter Property="BorderThickness" Value="0,1,0,0" />
-                                </Style>
-                            </ItemsControl.Styles>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="vm:HistoryEntryViewModel">
-                                    <Border Classes="historyRow" BorderBrush="{StaticResource CardBorderBrush}" Padding="16,12">
-                                        <views:HistoryEntryView />
+                    <!-- Grouped by day; one panel of rows per day rather than a card each, as the history can be long -->
+                    <ItemsControl ItemsSource="{Binding HistoryDays}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:HistoryDayViewModel">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Heading}" Classes="muted small" FontWeight="SemiBold" Margin="2,10,0,6" />
+                                    <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource CardBorderBrush}" BorderThickness="1"
+                                            CornerRadius="10">
+                                        <ItemsControl ItemsSource="{Binding Entries}">
+                                            <ItemsControl.Styles>
+                                                <Style Selector="ContentPresenter:nth-child(n+2) > Border.historyRow">
+                                                    <Setter Property="BorderThickness" Value="0,1,0,0" />
+                                                </Style>
+                                            </ItemsControl.Styles>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:HistoryEntryViewModel">
+                                                    <Border Classes="historyRow" BorderBrush="{StaticResource CardBorderBrush}" Padding="16,12">
+                                                        <views:HistoryEntryView />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
                                     </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </Border>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

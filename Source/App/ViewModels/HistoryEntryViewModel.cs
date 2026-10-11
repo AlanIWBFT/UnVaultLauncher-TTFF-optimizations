@@ -5,34 +5,35 @@ using UnVault.App.Services;
 
 namespace UnVault.App.ViewModels;
 
-/// <summary>A finished operation in the Downloads tab's history.</summary>
+/// <summary>
+/// A finished operation in the Downloads tab's history: what it worked on, and beneath it what happened, in the past tense
+/// ("Installed into UE 5.6  ·  E:\Epic Games\UE_5.6", "Install into UE 5.6 paused").
+/// </summary>
 public partial class HistoryEntryViewModel(OperationRecord record) : ViewModelBase
 {
     public OperationRecord Record { get; } = record;
-    public string Title => Record.Title;
-    public string? Message => Record.Message;
-    public bool HasMessage => !string.IsNullOrEmpty(Message);
+
+    /// <summary>The engine or Library item; a whole sentence in entries saved before operations kept their parts.</summary>
+    public string Name => Record.Title;
+
+    public string? Line => Record.Kind is { } kind ? Describe(new OperationAction(kind, Record.Target)) : Record.Message;
+    public bool HasLine => !string.IsNullOrEmpty(Line);
+
+    private string Describe(OperationAction action) => Record.Outcome switch
+    {
+        OperationOutcome.Completed => Record.Message is { Length: > 0 } detail ? $"{action.Done}  ·  {detail}" : action.Done,
+        OperationOutcome.Paused => Localized.Format(Strings.ActionPaused, action.Name),
+        _ => Localized.Format(Strings.ActionFailed, action.Name, Record.Message ?? ""),
+    };
 
     public bool IsCompleted => Record.Outcome == OperationOutcome.Completed;
     public bool IsPaused => Record.Outcome == OperationOutcome.Paused;
     public bool IsFailed => Record.Outcome == OperationOutcome.Failed;
 
-    public string OutcomeText => Record.Outcome switch
-    {
-        OperationOutcome.Completed => Strings.PhaseDone,
-        OperationOutcome.Paused => Strings.PhasePaused,
-        _ => Strings.PhaseFailed,
-    };
+    /// <summary>The day it finished, which its group says.</summary>
+    public DateTime Day => Record.FinishedAt.ToLocalTime().Date;
 
-    /// <summary>The time for today's, the date and time for older ones.</summary>
-    public string WhenText
-    {
-        get
-        {
-            var when = Record.FinishedAt.ToLocalTime();
-            return when.Date == DateTime.Today ? when.ToString("t", CultureInfo.CurrentCulture) : when.ToString("g", CultureInfo.CurrentCulture);
-        }
-    }
+    public string TimeText => Record.FinishedAt.ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
 
     /// <summary>A next step the operation offered, e.g. Repair after a verify. This session only: it isn't saved.</summary>
     [ObservableProperty]
@@ -50,5 +51,30 @@ public partial class HistoryEntryViewModel(OperationRecord record) : ViewModelBa
         FollowUp = null;
         FollowUpText = null;
         followUp?.Invoke();
+    }
+}
+
+/// <summary>The history entries of one day, under a heading: Today, Yesterday, the weekday, or the date.</summary>
+public sealed class HistoryDayViewModel(string heading, IReadOnlyList<HistoryEntryViewModel> entries)
+{
+    public string Heading { get; } = heading;
+    public IReadOnlyList<HistoryEntryViewModel> Entries { get; } = entries;
+
+    /// <summary>Groups entries (newest first) by the day they finished.</summary>
+    public static List<HistoryDayViewModel> Group(IEnumerable<HistoryEntryViewModel> entries, DateTime today) =>
+        [.. entries.GroupBy(e => e.Day).Select(day => new HistoryDayViewModel(HeadingFor(day.Key, today), [.. day]))];
+
+    /// <summary>
+    /// Weekday and month names in the language the app's texts are in, beside "Today" and "Yesterday": Windows' regional
+    /// format can be another language (Russian dates under an English interface).
+    /// </summary>
+    internal static string HeadingFor(DateTime day, DateTime today)
+    {
+        var language = Strings.Culture ?? CultureInfo.CurrentUICulture;
+        return day == today ? Strings.HistoryToday
+            : day == today.AddDays(-1) ? Strings.HistoryYesterday
+            : day > today.AddDays(-7) ? day.ToString("dddd", language) // this week: the weekday
+            : day.Year == today.Year ? day.ToString("M", language) // "October 8", as the language puts it
+            : day.ToString("D", language);
     }
 }

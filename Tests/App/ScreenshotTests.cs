@@ -289,7 +289,7 @@ public class ScreenshotTests
 
         // In progress: running, paused and failed, each with what can be done about it.
         static Task<string?> Nothing(OperationViewModel _, Core.Install.InstallStatus __, CancellationToken ___) => Task.FromResult<string?>(null);
-        viewModel.Operations.Add(new OperationViewModel(viewModel, "Installing Unreal Engine 5.8.3", Nothing, ["UE_5.8"])
+        viewModel.Operations.Add(new OperationViewModel(viewModel, "Unreal Engine 5.8.3", new(OperationKind.InstallEngine), Nothing, ["UE_5.8"])
         {
             Phase = "Downloading",
             IsIndeterminate = false,
@@ -297,21 +297,27 @@ public class ScreenshotTests
             ProgressText = "4.1 GB of 10.9 GB  ·  61 204/206 255 files",
             SpeedText = "48.2 MB/s  ·  2m left",
         });
-        viewModel.Operations.Add(new OperationViewModel(viewModel, "Downloading Garden Pack for UE 5.7", Nothing, fabItemKey: "fab:garden")
+        viewModel.Operations.Add(new OperationViewModel(viewModel, "Garden Pack", new(OperationKind.Download, "5.7"), Nothing, fabItemKey: "fab:garden")
             { State = OperationState.Cancelled, Phase = "Paused", Message = "Resume continues where it left off." });
-        viewModel.Operations.Add(new OperationViewModel(viewModel, "Installing Greybox Tools into UE 5.6", Nothing, ["UE_5.6"])
+        viewModel.Operations.Add(new OperationViewModel(viewModel, "Greybox Tools", new(OperationKind.InstallPlugin, "5.6"), Nothing, ["UE_5.6"])
             { State = OperationState.Failed, Phase = "Failed", Message = "Couldn't reach Epic: the request timed out." });
         Assert.DoesNotContain("UE_5.8", viewModel.InstallableEngines.Select(e => e.AppName)); // already being installed
         Assert.Equal(["Resume", "Retry"], viewModel.Operations.Where(o => o.CanRetry).Select(o => o.RetryText));
 
-        // History: newest first; a next step an operation offered is there for this session.
-        HistoryEntryViewModel Entry(string title, OperationOutcome outcome, string message, TimeSpan ago) =>
-            new(new OperationRecord(title, outcome, message, DateTimeOffset.Now - ago));
-        viewModel.History.Add(Entry("Verifying Unreal Engine 5.6.1", OperationOutcome.Completed, "3 of 198 112 files are missing or damaged.", TimeSpan.FromMinutes(5)));
+        // History: by day, newest first; a next step an operation offered is there for this session. Times fixed within each
+        // day, so the screenshot doesn't depend on the hour it's taken.
+        HistoryEntryViewModel Entry(string subject, OperationKind kind, string? target, OperationOutcome outcome, string? message, int daysAgo, int hour) =>
+            new(new OperationRecord(subject, outcome, message, DateTime.Today.AddDays(-daysAgo).AddHours(hour)) { Kind = kind, Target = target });
+        viewModel.History.Add(Entry("Unreal Engine 5.6.1", OperationKind.VerifyEngine, null, OperationOutcome.Completed, "3 of 198 112 files missing or damaged", 0, 18));
         viewModel.History[0].FollowUpText = "Repair";
-        viewModel.History.Add(Entry("Adding Street Vehicles to Hillside", OperationOutcome.Completed, @"Added 214 files to D:\Projects\Hillside.", TimeSpan.FromHours(2)));
-        viewModel.History.Add(Entry("Changing components of Unreal Engine 5.7", OperationOutcome.Paused, "Stopped before it finished.", TimeSpan.FromDays(1)));
-        viewModel.History.Add(Entry("Removing Edge Smoother from UE 5.5", OperationOutcome.Failed, "Access to the path is denied.", TimeSpan.FromDays(3)));
+        viewModel.History.Add(Entry("\"Cliffside!\" a Layered Rock Heightmap Brush Kit", OperationKind.InstallPlugin, "5.6", OperationOutcome.Completed, @"E:\Epic Games\UE_5.6", 0, 17));
+        viewModel.History.Add(Entry("\"Cliffside!\" a Layered Rock Heightmap Brush Kit", OperationKind.InstallPlugin, "5.6", OperationOutcome.Paused, null, 0, 16));
+        viewModel.History.Add(Entry("Edge Smoother", OperationKind.RemovePlugin, "5.5", OperationOutcome.Completed, "freed 114 MB", 0, 9));
+        viewModel.History.Add(Entry("Street Vehicles", OperationKind.AddToProject, "Hillside", OperationOutcome.Completed, @"214 files in D:\Projects\Hillside\Content", 1, 21));
+        viewModel.History.Add(Entry("Garden Pack", OperationKind.Download, "5.7", OperationOutcome.Failed, "Couldn't reach Epic: the request timed out.", 1, 12));
+        // Saved before operations kept their parts: as it was.
+        viewModel.History.Add(new(new OperationRecord("Changing components of Unreal Engine 5.7", OperationOutcome.Completed, "Done: freed 3.2 GB.",
+            DateTime.Today.AddDays(-1).AddHours(8))));
 
         viewModel.ShowDownloadsCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
@@ -330,6 +336,12 @@ public class ScreenshotTests
         Assert.Equal(resume.Bounds.Height, moveToHistory.Bounds.Height);
         Assert.Equal(moveToHistory.Bounds.Height, moveToHistory.Bounds.Width);
         Save(window, "downloads.png");
+
+        Assert.Equal(["Today", "Yesterday"], viewModel.HistoryDays.Select(d => d.Heading));
+        var page = window.GetVisualDescendants().OfType<ScrollViewer>().First(v => v.IsEffectivelyVisible && v.Content is StackPanel);
+        page.ScrollToEnd();
+        Dispatcher.UIThread.RunJobs();
+        Save(window, "downloads-history.png");
     }
 
     [AvaloniaFact]
@@ -475,7 +487,7 @@ public class ScreenshotTests
         // Two products named "Garden Pack": told apart by seller, and busy state follows the product, not the name.
         var plants = fab.Items.Where(i => i.Title == "Garden Pack").ToList();
         Assert.Equal(["Contoso Art", "Fabrikam Studio"], plants.Select(i => i.SellerText).Order());
-        var working = new OperationViewModel(fab.Owner, "Downloading Garden Pack", (_, _, _) => Task.FromResult<string?>(null), fabItemKey: plants[0].Key);
+        var working = new OperationViewModel(fab.Owner, "Garden Pack", new(OperationKind.Download, "5.7"), (_, _, _) => Task.FromResult<string?>(null), fabItemKey: plants[0].Key);
         fab.Owner.Operations.Add(working); // listed, not run: running is how an operation starts out
         fab.UpdateBusy();
         Assert.Equal([true, false], plants.Select(i => i.IsBusy));
@@ -671,7 +683,7 @@ public class ScreenshotTests
         Save(window, "installed-plugins.png");
 
         // While an operation works on the engine nothing is removed, and once it ends Remove is back, list still open.
-        var modify = new OperationViewModel(viewModel, "Changing components of Unreal Engine 5.7", (_, _, _) => Task.FromResult<string?>(null), ["UE_5.7"]);
+        var modify = new OperationViewModel(viewModel, "Unreal Engine 5.7", new(OperationKind.ModifyEngine), (_, _, _) => Task.FromResult<string?>(null), ["UE_5.7"]);
         viewModel.Operations.Add(modify); // listed as running, as an operation starts out
         viewModel.UpdateBusy();
         Assert.All(dialog.Plugins, p => Assert.False(p.RemoveCommand.CanExecute(null)));
@@ -741,7 +753,7 @@ public class ScreenshotTests
         Assert.Null(dialog.Note);
 
         // An operation works on 5.5 meanwhile: it can't be installed into, the pick stays, and it's back once that ends.
-        var modify = new OperationViewModel(viewModel, "Changing components of Unreal Engine 5.5", (_, _, _) => Task.FromResult<string?>(null), ["UE_5.5"]);
+        var modify = new OperationViewModel(viewModel, "Unreal Engine 5.5", new(OperationKind.ModifyEngine), (_, _, _) => Task.FromResult<string?>(null), ["UE_5.5"]);
         viewModel.Operations.Add(modify); // listed as running, as an operation starts out
         viewModel.UpdateBusy();
         Assert.Equal(("Busy with another operation", false), (notDownloaded.Badge, notDownloaded.IsAvailable));
@@ -753,7 +765,7 @@ public class ScreenshotTests
         Assert.True(dialog.ConfirmCommand.CanExecute(null));
 
         // Opened while every engine it fits is busy, nothing is picked; the first to be free is.
-        var update = new OperationViewModel(viewModel, "Updating Greybox Tools", (_, _, _) => Task.FromResult<string?>(null),
+        var update = new OperationViewModel(viewModel, "Greybox Tools", new(OperationKind.Update), (_, _, _) => Task.FromResult<string?>(null),
             [.. dialog.Targets.Where(t => t.IsUsable).Select(t => t.EngineAppName!)]);
         viewModel.Operations.Add(update);
         var waiting = new FabActionViewModel(viewModel.Fab, item, FabActionMode.InstallPlugin);

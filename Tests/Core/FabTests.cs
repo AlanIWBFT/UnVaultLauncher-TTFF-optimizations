@@ -341,14 +341,14 @@ public sealed class FabTests : IDisposable
     public void An_unfinished_install_known_by_its_journal_alone_is_found_and_removed()
     {
         string engine = Directory.CreateDirectory(Path.Combine(_dir, "UE_5.6")).FullName;
-        File.WriteAllText(Path.Combine(Directory.CreateDirectory(PluginInstalls.StateDirectory(engine, "GetRelief0a1b2c3dV7")).FullName, "0123456789ABCDEF.journal"), "");
-        string folder = Directory.CreateDirectory(Path.Combine(EnginePlugins.MarketplaceDirectory(engine), "GetRelief0a1b2c3dV7", "Content")).Parent!.FullName;
+        File.WriteAllText(Path.Combine(Directory.CreateDirectory(PluginInstalls.StateDirectory(engine, "Cliffside0a1b2c3dV7")).FullName, "0123456789ABCDEF.journal"), "");
+        string folder = Directory.CreateDirectory(Path.Combine(EnginePlugins.MarketplaceDirectory(engine), "Cliffside0a1b2c3dV7", "Content")).Parent!.FullName;
         File.WriteAllBytes(Path.Combine(folder, @"Content\Rock.uasset"), new byte[30]);
         File.WriteAllText(Path.Combine(Directory.CreateDirectory(PluginInstalls.StateDirectory(engine, "Waiting0a1b2c3dV2")).FullName, "FEDCBA9876543210.journal"), "");
 
         var plugins = EnginePlugins.Find(engine, []);
 
-        Assert.Equal([("GetRelief0a1b2c3dV7", false, true), ("Waiting0a1b2c3dV2", false, false)],
+        Assert.Equal([("Cliffside0a1b2c3dV7", false, true), ("Waiting0a1b2c3dV2", false, false)],
             plugins.Select(p => (p.ArtifactID, p.IsComplete, Directory.Exists(p.Folder))).OrderBy(p => p.ArtifactID));
         foreach (var plugin in plugins)
             FabWorkflow.UninstallPlugin(engine, plugin.ArtifactID, LauncherInstalled, plugin.Folder); // the second wrote nothing yet

@@ -258,6 +258,183 @@
     <value>Retry</value>
   </data>
 
+  <!-- Downloads tab: what an operation does, said as it runs, once done, and by name (for paused or failed). The
+       engine or Library item it works on is shown above it. -->
+  <data name="ActionInstallEngineRunning" xml:space="preserve">
+    <value>Installing</value>
+  </data>
+  <data name="ActionInstallEngineDone" xml:space="preserve">
+    <value>Installed</value>
+  </data>
+  <data name="ActionInstallEngineName" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="ActionModifyEngineRunning" xml:space="preserve">
+    <value>Changing components</value>
+  </data>
+  <data name="ActionModifyEngineDone" xml:space="preserve">
+    <value>Changed components</value>
+  </data>
+  <data name="ActionModifyEngineName" xml:space="preserve">
+    <value>Component change</value>
+  </data>
+  <data name="ActionVerifyEngineRunning" xml:space="preserve">
+    <value>Verifying</value>
+  </data>
+  <data name="ActionVerifyEngineDone" xml:space="preserve">
+    <value>Verified</value>
+  </data>
+  <data name="ActionVerifyEngineName" xml:space="preserve">
+    <value>Verify</value>
+  </data>
+  <data name="ActionRepairEngineRunning" xml:space="preserve">
+    <value>Repairing</value>
+  </data>
+  <data name="ActionRepairEngineDone" xml:space="preserve">
+    <value>Repaired</value>
+  </data>
+  <data name="ActionRepairEngineName" xml:space="preserve">
+    <value>Repair</value>
+  </data>
+  <data name="ActionInstallPluginRunning" xml:space="preserve">
+    <value>Installing into UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="ActionInstallPluginDone" xml:space="preserve">
+    <value>Installed into UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="ActionInstallPluginName" xml:space="preserve">
+    <value>Install into UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="ActionAddToProjectRunning" xml:space="preserve">
+    <value>Adding to {0}</value>
+    <comment>{0}: the project's name.</comment>
+  </data>
+  <data name="ActionAddToProjectDone" xml:space="preserve">
+    <value>Added to {0}</value>
+    <comment>{0}: the project's name.</comment>
+  </data>
+  <data name="ActionAddToProjectName" xml:space="preserve">
+    <value>Adding to {0}</value>
+    <comment>{0}: the project's name.</comment>
+  </data>
+  <data name="ActionCreateProjectRunning" xml:space="preserve">
+    <value>Creating a project</value>
+  </data>
+  <data name="ActionCreateProjectDone" xml:space="preserve">
+    <value>Created a project</value>
+  </data>
+  <data name="ActionCreateProjectName" xml:space="preserve">
+    <value>Project creation</value>
+  </data>
+  <data name="ActionDownloadRunning" xml:space="preserve">
+    <value>Downloading for UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="ActionDownloadDone" xml:space="preserve">
+    <value>Downloaded for UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="ActionDownloadName" xml:space="preserve">
+    <value>Download for UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="ActionRemovePluginRunning" xml:space="preserve">
+    <value>Removing from UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="ActionRemovePluginDone" xml:space="preserve">
+    <value>Removed from UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="ActionRemovePluginName" xml:space="preserve">
+    <value>Removal from UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="ActionUpdateRunning" xml:space="preserve">
+    <value>Updating</value>
+  </data>
+  <data name="ActionUpdateDone" xml:space="preserve">
+    <value>Updated</value>
+  </data>
+  <data name="ActionUpdateName" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="ActionPaused" xml:space="preserve">
+    <value>{0} paused</value>
+    <comment>{0}: the action by name, e.g. Install into UE 5.6.</comment>
+  </data>
+  <data name="ActionFailed" xml:space="preserve">
+    <value>{0} failed: {1}</value>
+    <comment>{0}: the action by name, e.g. Install into UE 5.6, {1}: what went wrong, possibly in English.</comment>
+  </data>
+
+  <!-- Downloads tab: what came of an operation, after its action ("Removed from UE 5.6  ·  freed 114 MB") -->
+  <data name="ModifyDetailFreedAdded_One" xml:space="preserve">
+    <value>freed {1}, added {0:N0} file</value>
+    <comment>{0}: files added, {1}: space freed.</comment>
+  </data>
+  <data name="ModifyDetailFreedAdded_Other" xml:space="preserve">
+    <value>freed {1}, added {0:N0} files</value>
+    <comment>{0}: files added, {1}: space freed.</comment>
+  </data>
+  <data name="ModifyDetailAdded_One" xml:space="preserve">
+    <value>added {0:N0} file</value>
+  </data>
+  <data name="ModifyDetailAdded_Other" xml:space="preserve">
+    <value>added {0:N0} files</value>
+  </data>
+  <data name="ModifyDetailFreed" xml:space="preserve">
+    <value>freed {0}</value>
+    <comment>{0}: space freed, e.g. 3.2 GB.</comment>
+  </data>
+  <data name="VerifyDetailAllOK_One" xml:space="preserve">
+    <value>{0:N0} file OK</value>
+  </data>
+  <data name="VerifyDetailAllOK_Other" xml:space="preserve">
+    <value>all {0:N0} files OK</value>
+  </data>
+  <data name="VerifyDetailBad_One" xml:space="preserve">
+    <value>{0:N0} of {1:N0} files missing or damaged</value>
+    <comment>{0}: damaged files, {1}: all files.</comment>
+  </data>
+  <data name="VerifyDetailBad_Other" xml:space="preserve">
+    <value>{0:N0} of {1:N0} files missing or damaged</value>
+    <comment>{0}: damaged files, {1}: all files.</comment>
+  </data>
+  <data name="RepairDetail_One" xml:space="preserve">
+    <value>{0:N0} file</value>
+  </data>
+  <data name="RepairDetail_Other" xml:space="preserve">
+    <value>{0:N0} files</value>
+  </data>
+  <data name="AddDetail_One" xml:space="preserve">
+    <value>{0:N0} file in {1}\Content</value>
+    <comment>{1}: the project's folder.</comment>
+  </data>
+  <data name="AddDetail_Other" xml:space="preserve">
+    <value>{0:N0} files in {1}\Content</value>
+    <comment>{1}: the project's folder.</comment>
+  </data>
+  <data name="RemoveDetail" xml:space="preserve">
+    <value>freed {0}</value>
+    <comment>{0}: space freed, e.g. 114 MB.</comment>
+  </data>
+  <data name="UpdateDetail_One" xml:space="preserve">
+    <value>{0:N0} copy</value>
+  </data>
+  <data name="UpdateDetail_Other" xml:space="preserve">
+    <value>{0:N0} copies</value>
+  </data>
+  <data name="HistoryToday" xml:space="preserve">
+    <value>Today</value>
+  </data>
+  <data name="HistoryYesterday" xml:space="preserve">
+    <value>Yesterday</value>
+  </data>
+
   <!-- Settings -->
   <data name="AddFolder" xml:space="preserve">
     <value>Add Folder…</value>
@@ -363,39 +540,6 @@
   <data name="InstalledCheckingEpic_Other" xml:space="preserve">
     <value>{0:N0} installed  ·  Checking Epic for versions and updates…</value>
   </data>
-  <data name="ModifyDoneAdded_One" xml:space="preserve">
-    <value>Done: added {0:N0} file.</value>
-    <comment>After changing an engine's components.</comment>
-  </data>
-  <data name="ModifyDoneAdded_Other" xml:space="preserve">
-    <value>Done: added {0:N0} files.</value>
-  </data>
-  <data name="ModifyDoneFreedAdded_One" xml:space="preserve">
-    <value>Done: freed {1}, added {0:N0} file.</value>
-    <comment>{1}: disk space freed, e.g. "1.2 GB".</comment>
-  </data>
-  <data name="ModifyDoneFreedAdded_Other" xml:space="preserve">
-    <value>Done: freed {1}, added {0:N0} files.</value>
-  </data>
-  <data name="VerifyAllOK_One" xml:space="preserve">
-    <value>{0:N0} file is OK.</value>
-  </data>
-  <data name="VerifyAllOK_Other" xml:space="preserve">
-    <value>All {0:N0} files are OK.</value>
-  </data>
-  <data name="VerifyBad_One" xml:space="preserve">
-    <value>{0:N0} of {1:N0} files is missing or damaged.</value>
-    <comment>{0}: bad files, {1}: all files checked.</comment>
-  </data>
-  <data name="VerifyBad_Other" xml:space="preserve">
-    <value>{0:N0} of {1:N0} files are missing or damaged.</value>
-  </data>
-  <data name="Repaired_One" xml:space="preserve">
-    <value>Repaired {0:N0} file.</value>
-  </data>
-  <data name="Repaired_Other" xml:space="preserve">
-    <value>Repaired {0:N0} files.</value>
-  </data>
   <data name="LibrarySummary_One" xml:space="preserve">
     <value>{0:N0} item  ·  {1:N0} downloaded</value>
     <comment>{0}: items in the library, {1}: of them in the Vault Cache.</comment>
@@ -409,20 +553,6 @@
   </data>
   <data name="LibraryFiltered_Other" xml:space="preserve">
     <value>{1:N0} of {0:N0} items</value>
-  </data>
-  <data name="AddedFiles_One" xml:space="preserve">
-    <value>Added {0:N0} file to {1}\Content.</value>
-    <comment>{1}: the project folder.</comment>
-  </data>
-  <data name="AddedFiles_Other" xml:space="preserve">
-    <value>Added {0:N0} files to {1}\Content.</value>
-  </data>
-  <data name="UpdatedCopies_One" xml:space="preserve">
-    <value>Updated {0:N0} copy to Fab's latest build.</value>
-    <comment>Copies of a Fab item: in the Vault Cache or installed into engines.</comment>
-  </data>
-  <data name="UpdatedCopies_Other" xml:space="preserve">
-    <value>Updated {0:N0} copies to Fab's latest build.</value>
   </data>
   <data name="VaultAssets_One" xml:space="preserve">
     <value>{0:N0} downloaded asset ({1}). UnVault reuses it instead of downloading again.</value>
@@ -586,46 +716,6 @@
   </data>
 
   <!-- Downloads and other work in progress -->
-  <data name="OperationInstalling" xml:space="preserve">
-    <value>Installing {0}</value>
-    <comment>{0}: what, e.g. "Unreal Engine 5.8.3".</comment>
-  </data>
-  <data name="OperationChangingComponents" xml:space="preserve">
-    <value>Changing components of {0}</value>
-    <comment>{0}: the engine, e.g. "Unreal Engine 5.7.4".</comment>
-  </data>
-  <data name="OperationVerifying" xml:space="preserve">
-    <value>Verifying {0}</value>
-    <comment>{0}: the engine.</comment>
-  </data>
-  <data name="OperationRepairing" xml:space="preserve">
-    <value>Repairing {0}</value>
-    <comment>{0}: the engine.</comment>
-  </data>
-  <data name="OperationInstallingInto" xml:space="preserve">
-    <value>Installing {0} into UE {1}</value>
-    <comment>{0}: a Fab plugin, {1}: the engine version, e.g. 5.7.</comment>
-  </data>
-  <data name="OperationAdding" xml:space="preserve">
-    <value>Adding {0} to {1}</value>
-    <comment>{0}: a Fab item, {1}: a project.</comment>
-  </data>
-  <data name="OperationCreatingProject" xml:space="preserve">
-    <value>Creating project from {0}</value>
-    <comment>{0}: a Fab project.</comment>
-  </data>
-  <data name="OperationDownloadingItem" xml:space="preserve">
-    <value>Downloading {0} ({1})</value>
-    <comment>{0}: a Fab item, {1}: the engine version it's for.</comment>
-  </data>
-  <data name="OperationRemoving" xml:space="preserve">
-    <value>Removing {0} from UE {1}</value>
-    <comment>{0}: a Fab plugin, {1}: the engine version.</comment>
-  </data>
-  <data name="OperationUpdating" xml:space="preserve">
-    <value>Updating {0}</value>
-    <comment>{0}: a Fab item.</comment>
-  </data>
   <data name="PhaseDownloading" xml:space="preserve">
     <value>Downloading</value>
   </data>
@@ -685,40 +775,9 @@
     <value>Not finished installing</value>
     <comment>In Installed Plugins, for a plugin whose install was paused or interrupted: installing it again continues it.</comment>
   </data>
-  <data name="StoppedBeforeFinished" xml:space="preserve">
-    <value>Stopped before it finished.</value>
-    <comment>In the Downloads history, for an operation that was paused and not resumed.</comment>
-  </data>
   <data name="WaitsForOther" xml:space="preserve">
-    <value>"{0}" is working on the same files. Retry once it's done.</value>
-    <comment>{0}: the other operation, as the downloads list names it, e.g. Changing components of Unreal Engine 5.7.</comment>
-  </data>
-  <data name="EngineInstalled" xml:space="preserve">
-    <value>Installed to {0}. Projects for {1} now open with it.</value>
-    <comment>{0}: a folder, {1}: the engine version, e.g. 5.8.</comment>
-  </data>
-  <data name="ModifyDone" xml:space="preserve">
-    <value>Done.</value>
-  </data>
-  <data name="ModifyDoneFreed" xml:space="preserve">
-    <value>Done: freed {0}.</value>
-    <comment>{0}: disk space, e.g. "1.2 GB".</comment>
-  </data>
-  <data name="PluginInstalledInto" xml:space="preserve">
-    <value>Installed into {0}.</value>
-    <comment>{0}: the engine folder.</comment>
-  </data>
-  <data name="ProjectCreated" xml:space="preserve">
-    <value>Created {0}.</value>
-    <comment>{0}: the new project's .uproject file.</comment>
-  </data>
-  <data name="InVaultCacheAt" xml:space="preserve">
-    <value>In your Vault Cache: {0} ({1}).</value>
-    <comment>{0}: a folder, {1}: its size.</comment>
-  </data>
-  <data name="RemovedFreed" xml:space="preserve">
-    <value>Removed from UE {0}; freed {1}.</value>
-    <comment>{0}: an engine version, {1}: disk space.</comment>
+    <value>Another operation works on the same files: {0} ({1}). Retry once it's done.</value>
+    <comment>{0}: what the other one works on (an engine or a Library item), {1}: what it does, e.g. Changing components.</comment>
   </data>
   <data name="ProgressOf" xml:space="preserve">
     <value>{0} of {1}</value>

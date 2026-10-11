@@ -7,8 +7,17 @@ namespace UnVault.App.Services;
 
 public enum OperationOutcome { Completed, Paused, Failed }
 
+public enum OperationKind { InstallEngine, ModifyEngine, VerifyEngine, RepairEngine, InstallPlugin, AddToProject, CreateProject, Download, RemovePlugin, Update }
+
 /// <summary>A finished operation, as the Downloads tab's history lists it.</summary>
-public sealed record OperationRecord(string Title, OperationOutcome Outcome, string? Message, DateTimeOffset FinishedAt);
+/// <param name="Title">What it worked on: an engine, a Library item. Entries saved before <see cref="Kind"/> was kept hold a sentence.</param>
+/// <param name="Message">Done: what came of it ("freed 114 MB"); failed: what went wrong.</param>
+public sealed record OperationRecord(string Title, OperationOutcome Outcome, string? Message, DateTimeOffset FinishedAt)
+{
+    /// <summary>What it did, with <see cref="Target"/>; null in entries saved before it was kept, which show as they were.</summary>
+    public OperationKind? Kind { get; init; }
+    public string? Target { get; init; }
+}
 
 /// <summary>
 /// The Downloads tab's history, kept in %LOCALAPPDATA%\UnVaultLauncher\history.json, newest first. Only a record: what

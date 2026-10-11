@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UnVault.App.Services;
 using UnVault.Core.EGL;
 using UnVault.Core.Epic;
 using UnVault.Core.Fab;
@@ -400,7 +401,7 @@ public partial class FabLibraryViewModel : ViewModelBase
 
     internal void StartPluginInstall(FabItemViewModel item, FabVersion version, LocalEngine engine)
     {
-        Owner.StartOperation(new OperationViewModel(Owner, Localized.Format(Strings.OperationInstallingInto, item.Title, engine.AppName[3..]), async (operation, status, cancellationToken) =>
+        Owner.StartOperation(new OperationViewModel(Owner, item.Title, new OperationAction(OperationKind.InstallPlugin, engine.AppName[3..]), async (operation, status, cancellationToken) =>
         {
             if (version.IsDownloaded && !version.IsOutdated)
             {
@@ -414,38 +415,38 @@ public partial class FabLibraryViewModel : ViewModelBase
                 var source = await FabWorkflow.FetchAsync(Owner.Services.API, artifact, cancellationToken);
                 await FabWorkflow.InstallPluginAsync(source, artifact, engine.Directory, Owner.CreateInstaller(), status, cancellationToken);
             }
-            return Localized.Format(Strings.PluginInstalledInto, engine.Directory);
+            return engine.Directory;
         }, engines: [engine.AppName], fabItemKey: item.Key));
     }
 
     internal void StartAddToProject(FabItemViewModel item, FabVersion version, UnrealProject project)
     {
-        Owner.StartOperation(new OperationViewModel(Owner, Localized.Format(Strings.OperationAdding, item.Title, project.Name), async (operation, status, cancellationToken) =>
+        Owner.StartOperation(new OperationViewModel(Owner, item.Title, new OperationAction(OperationKind.AddToProject, project.Name), async (operation, status, cancellationToken) =>
         {
             var entry = await EnsureInVaultAsync(item, version, operation, status, cancellationToken);
             var copy = operation.BeginPhase(Strings.PhaseCopyingIntoProject);
             int files = await FabWorkflow.AddToProjectAsync(entry, project.Directory, copy, cancellationToken);
-            return Localized.Plural(nameof(Strings.AddedFiles_Other), files, project.Directory);
+            return Localized.Plural(nameof(Strings.AddDetail_Other), files, project.Directory);
         }, fabItemKey: item.Key));
     }
 
     internal void StartCreateProject(FabItemViewModel item, FabVersion version, string targetDirectory)
     {
-        Owner.StartOperation(new OperationViewModel(Owner, Localized.Format(Strings.OperationCreatingProject, item.Title), async (operation, status, cancellationToken) =>
+        Owner.StartOperation(new OperationViewModel(Owner, item.Title, new OperationAction(OperationKind.CreateProject), async (operation, status, cancellationToken) =>
         {
             var entry = await EnsureInVaultAsync(item, version, operation, status, cancellationToken);
             var copy = operation.BeginPhase(Strings.PhaseCopyingProject);
             string uproject = await FabWorkflow.CreateProjectAsync(entry, targetDirectory, copy, cancellationToken);
-            return Localized.Format(Strings.ProjectCreated, uproject);
+            return uproject;
         }, fabItemKey: item.Key));
     }
 
     internal void StartDownload(FabItemViewModel item, FabVersion version)
     {
-        Owner.StartOperation(new OperationViewModel(Owner, Localized.Format(Strings.OperationDownloadingItem, item.Title, version.EngineAppName[3..]), async (operation, status, cancellationToken) =>
+        Owner.StartOperation(new OperationViewModel(Owner, item.Title, new OperationAction(OperationKind.Download, version.EngineAppName[3..]), async (operation, status, cancellationToken) =>
         {
             var entry = await EnsureInVaultAsync(item, version, operation, status, cancellationToken);
-            return Localized.Format(Strings.InVaultCacheAt, entry.Directory, ByteSize.Format(entry.Size));
+            return $"{entry.Directory}  ·  {ByteSize.Format(entry.Size)}";
         }, fabItemKey: item.Key));
     }
 
@@ -454,11 +455,11 @@ public partial class FabLibraryViewModel : ViewModelBase
     internal OperationViewModel StartRemove(string title, string? itemKey, FabInstall install)
     {
         string engine = install.EngineAppName[3..];
-        var removal = new OperationViewModel(Owner, Localized.Format(Strings.OperationRemoving, title, engine), async (operation, _, _) =>
+        var removal = new OperationViewModel(Owner, title, new OperationAction(OperationKind.RemovePlugin, engine), async (operation, _, _) =>
         {
             operation.SetPhase(Strings.PhaseDeletingFiles);
             var removed = await Task.Run(() => FabWorkflow.UninstallPlugin(install.EngineDirectory, install.ArtifactID, folder: install.Folder));
-            return Localized.Format(Strings.RemovedFreed, engine, ByteSize.Format(removed.BytesFreed));
+            return Localized.Format(Strings.RemoveDetail, ByteSize.Format(removed.BytesFreed));
         }, engines: [install.EngineAppName], fabItemKey: itemKey);
         Owner.StartOperation(removal);
         return removal;
@@ -491,7 +492,7 @@ public partial class FabLibraryViewModel : ViewModelBase
     /// <summary>Brings outdated copies of an item up to Fab's build, one after another.</summary>
     internal void StartUpdate(FabItemViewModel item, IReadOnlyList<FabVersion> downloads, IReadOnlyList<FabInstall> installs)
     {
-        Owner.StartOperation(new OperationViewModel(Owner, Localized.Format(Strings.OperationUpdating, item.Title), async (operation, _, cancellationToken) =>
+        Owner.StartOperation(new OperationViewModel(Owner, item.Title, new OperationAction(OperationKind.Update), async (operation, _, cancellationToken) =>
         {
             foreach (var version in downloads)
             {
@@ -512,7 +513,7 @@ public partial class FabLibraryViewModel : ViewModelBase
                 await FabWorkflow.ApplyPluginUpdateAsync(update, Owner.CreateInstaller(), status, cancellationToken);
             }
             int count = downloads.Count + installs.Count;
-            return Localized.Plural(nameof(Strings.UpdatedCopies_Other), count);
+            return Localized.Plural(nameof(Strings.UpdateDetail_Other), count);
         }, engines: [.. installs.Select(i => i.EngineAppName).Distinct(StringComparer.OrdinalIgnoreCase)], fabItemKey: item.Key));
     }
 

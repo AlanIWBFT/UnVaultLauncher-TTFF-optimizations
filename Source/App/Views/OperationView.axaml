@@ -5,13 +5,12 @@
              x:Class="UnVault.App.Views.OperationView"
              x:DataType="vm:OperationViewModel">
 
-    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
-        <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
-            <TextBlock Text="{Binding Phase}" Classes="muted" />
-        </StackPanel>
+    <!-- What it works on, beneath it what it does and the step it's on, then how far it is (or why it stopped) -->
+    <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
+        <TextBlock Text="{Binding Subject}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Subject}" />
+        <TextBlock Grid.Row="1" Text="{Binding ActionLine}" Classes="muted small" Margin="0,3,0,0" />
 
-        <StackPanel Grid.Column="1" Grid.RowSpan="3" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0">
+        <StackPanel Grid.Column="1" Grid.RowSpan="4" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="16,0,0,0">
             <Button Content="{x:Static s:Strings.Pause}" Command="{Binding PauseCommand}" IsVisible="{Binding IsRunning}" />
             <Button Content="{Binding RetryText}" Classes="accent" Command="{Binding RetryCommand}" IsVisible="{Binding CanRetry}" />
             <!-- Not to be resumed: into the history. A square as tall as the button beside it. -->
@@ -22,9 +21,9 @@
             </Button>
         </StackPanel>
 
-        <ProgressBar Grid.Row="1" Margin="0,6" Value="{Binding Progress}" IsIndeterminate="{Binding IsIndeterminate}" IsVisible="{Binding IsRunning}" />
+        <ProgressBar Grid.Row="2" Margin="0,8,0,6" Value="{Binding Progress}" IsIndeterminate="{Binding IsIndeterminate}" IsVisible="{Binding IsRunning}" />
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="16">
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="16" Margin="0,2,0,0">
             <TextBlock Text="{Binding ProgressText}" Classes="muted small" IsVisible="{Binding IsRunning}" />
             <TextBlock Text="{Binding SpeedText}" Classes="muted small" IsVisible="{Binding IsRunning}" />
             <TextBlock Text="{Binding Message}" Classes="muted small" TextWrapping="Wrap" IsVisible="{Binding IsSucceededOrCancelled}" />

@@ -30,19 +30,29 @@ public partial class OperationViewModel : ViewModelBase
     private long _lastBytes;
     private double _bytesPerSecond;
 
+    /// <param name="subject">What it works on, as people know it: "Unreal Engine 5.7.4", a Library item's title.</param>
+    /// <param name="action">What it does to it.</param>
+    /// <param name="work">Does it; returns a short note on what came of it ("freed 114 MB"), or null.</param>
     /// <param name="engines">The engines it works on (installing one, or plugins in them), by app name.</param>
     /// <param name="fabItemKey">The Library item it works on.</param>
-    public OperationViewModel(MainViewModel owner, string title, Work work, IReadOnlyList<string>? engines = null, string? fabItemKey = null)
+    public OperationViewModel(MainViewModel owner, string subject, OperationAction action, Work work, IReadOnlyList<string>? engines = null,
+        string? fabItemKey = null)
     {
         _owner = owner;
         _work = work;
-        Title = title;
+        Subject = subject;
+        Action = action;
         EngineAppNames = engines ?? [];
         FabItemKey = fabItemKey;
         _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) => UpdateProgress());
     }
 
-    public string Title { get; }
+    public string Subject { get; }
+    public OperationAction Action { get; }
+
+    /// <summary>Under the subject: what it does, and the step it's on unless that says the same ("Verifying").</summary>
+    public string ActionLine =>
+        string.Equals(Phase, Action.Running, StringComparison.OrdinalIgnoreCase) ? Action.Running : $"{Action.Running}  ·  {Phase}";
 
     /// <summary>The engines this works on (by app name, since engine cards are rebuilt on refresh).</summary>
     public IReadOnlyList<string> EngineAppNames { get; }
@@ -56,7 +66,9 @@ public partial class OperationViewModel : ViewModelBase
     public bool Overlaps(OperationViewModel other) =>
         EngineAppNames.Any(other.WorksOn) || FabItemKey is not null && FabItemKey == other.FabItemKey;
 
-    [ObservableProperty] public partial string Phase { get; set; } = "Starting…";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ActionLine))]
+    public partial string Phase { get; set; } = "Starting…";
     [ObservableProperty] public partial double Progress { get; set; }
     [ObservableProperty] public partial bool IsIndeterminate { get; set; } = true;
     [ObservableProperty] public partial string ProgressText { get; set; } = "";
@@ -112,7 +124,7 @@ public partial class OperationViewModel : ViewModelBase
             if (State == OperationState.Running)
                 State = OperationState.Cancelled; // never started
             Phase = Strings.PhaseWaiting;
-            Message = Localized.Format(Strings.WaitsForOther, other.Title);
+            Message = Localized.Format(Strings.WaitsForOther, other.Subject, other.Action.Running);
             return;
         }
 
@@ -177,10 +189,7 @@ public partial class OperationViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRetry))]
     private void MoveToHistory()
     {
-        if (IsFailed)
-            _owner.MoveToHistory(this, OperationOutcome.Failed);
-        else
-            _owner.MoveToHistory(this, OperationOutcome.Paused, Strings.StoppedBeforeFinished);
+        _owner.MoveToHistory(this, IsFailed ? OperationOutcome.Failed : OperationOutcome.Paused);
         _work = null; // a failed install kept its manifest for retry
         MemoryRelief.Release();
     }

@@ -41,7 +41,12 @@ public partial class MainViewModel : ViewModelBase
             OnPropertyChanged(nameof(HasRunningOperations));
         };
         History = [.. OperationHistory.Load(_historyPath).Select(record => new HistoryEntryViewModel(record))];
-        History.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHistory));
+        History.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasHistory));
+            GroupHistory();
+        };
+        GroupHistory();
         UpdateAccount();
     }
 
@@ -98,12 +103,21 @@ public partial class MainViewModel : ViewModelBase
     public ObservableCollection<HistoryEntryViewModel> History { get; }
     public bool HasHistory => History.Count > 0;
 
+    /// <summary>The history by day, as the Downloads tab shows it.</summary>
+    [ObservableProperty] public partial IReadOnlyList<HistoryDayViewModel> HistoryDays { get; set; } = [];
+
+    /// <summary>Also when the tab is shown: Today may have become Yesterday since.</summary>
+    private void GroupHistory() => HistoryDays = HistoryDayViewModel.Group(History, DateTime.Today);
+
     /// <summary>Done, or paused or failed and given up on: the operation leaves the list for the history.</summary>
-    /// <param name="message">What the history says about it; what the operation last said, if not given.</param>
-    internal void MoveToHistory(OperationViewModel operation, OperationOutcome outcome, string? message = null)
+    internal void MoveToHistory(OperationViewModel operation, OperationOutcome outcome)
     {
         Operations.Remove(operation);
-        History.Insert(0, new HistoryEntryViewModel(new OperationRecord(operation.Title, outcome, message ?? operation.Message, DateTimeOffset.Now))
+        // Done: what came of it; failed: what went wrong. Paused says it all.
+        string? message = outcome == OperationOutcome.Paused ? null : operation.Message;
+        var record = new OperationRecord(operation.Subject, outcome, message, DateTimeOffset.Now)
+            { Kind = operation.Action.Kind, Target = operation.Action.Target };
+        History.Insert(0, new HistoryEntryViewModel(record)
         {
             FollowUpText = operation.FollowUp?.Text,
             FollowUp = operation.FollowUp?.Action,
@@ -120,12 +134,7 @@ public partial class MainViewModel : ViewModelBase
     internal void RecordUnfinished()
     {
         foreach (var operation in Operations.Reverse().ToList())
-        {
-            if (operation.IsFailed)
-                MoveToHistory(operation, OperationOutcome.Failed);
-            else
-                MoveToHistory(operation, OperationOutcome.Paused, Strings.StoppedBeforeFinished);
-        }
+            MoveToHistory(operation, operation.IsFailed ? OperationOutcome.Failed : OperationOutcome.Paused);
     }
 
     [RelayCommand]
@@ -274,7 +283,11 @@ public partial class MainViewModel : ViewModelBase
     private void ShowEngines() => Tab = AppTab.Engines;
 
     [RelayCommand]
-    private void ShowDownloads() => Tab = AppTab.Downloads;
+    private void ShowDownloads()
+    {
+        GroupHistory();
+        Tab = AppTab.Downloads;
+    }
 
     /// <summary>
     /// Switches at once; the first visit starts loading the library, which shows its own progress. Not awaited: an async
@@ -522,28 +535,28 @@ public partial class MainViewModel : ViewModelBase
 
     internal void StartInstall(string appName, string title, InstallSource source, IReadOnlySet<string> tags, string directory)
     {
-        StartOperation(new OperationViewModel(this, Localized.Format(Strings.OperationInstalling, title), async (operation, status, cancellationToken) =>
+        StartOperation(new OperationViewModel(this, title, new OperationAction(OperationKind.InstallEngine), async (operation, status, cancellationToken) =>
         {
             var plan = InstallWorkflow.PlanInstall(source, tags);
             operation.SetPhase(Strings.PhaseDownloading);
             await InstallWorkflow.InstallAsync(source, plan, tags, null, directory, CreateInstaller(), status, register: true, cancellationToken);
-            return Localized.Format(Strings.EngineInstalled, directory, appName[3..]);
+            return directory;
         }, [appName]));
     }
 
     internal void StartModify(EngineCardViewModel engine, ModifyPlan plan)
     {
-        StartOperation(new OperationViewModel(this, Localized.Format(Strings.OperationChangingComponents, engine.Title), async (operation, status, cancellationToken) =>
+        StartOperation(new OperationViewModel(this, engine.Title, new OperationAction(OperationKind.ModifyEngine), async (operation, status, cancellationToken) =>
         {
             operation.SetPhase(plan.ToAdd is null ? Strings.PhaseRemovingFiles : Strings.PhaseDownloading);
             var cleaned = await InstallWorkflow.ApplyModifyAsync(plan, CreateInstaller(), status, cancellationToken);
             string freed = ByteSize.Format(cleaned.BytesFreed);
             return (cleaned.FilesDeleted > 0, plan.ToAdd) switch
             {
-                (true, { } added) => Localized.Plural(nameof(Strings.ModifyDoneFreedAdded_Other), added.Files.Count, freed),
-                (false, { } added) => Localized.Plural(nameof(Strings.ModifyDoneAdded_Other), added.Files.Count),
-                (true, null) => Localized.Format(Strings.ModifyDoneFreed, freed),
-                _ => Strings.ModifyDone,
+                (true, { } added) => Localized.Plural(nameof(Strings.ModifyDetailFreedAdded_Other), added.Files.Count, freed),
+                (false, { } added) => Localized.Plural(nameof(Strings.ModifyDetailAdded_Other), added.Files.Count),
+                (true, null) => Localized.Format(Strings.ModifyDetailFreed, freed),
+                _ => null,
             };
         }, [engine.AppName]));
     }
@@ -553,7 +566,7 @@ public partial class MainViewModel : ViewModelBase
         if (engine.Local is null)
             return;
         var local = engine.Local;
-        StartOperation(new OperationViewModel(this, Localized.Format(Strings.OperationVerifying, engine.Title), async (operation, status, cancellationToken) =>
+        StartOperation(new OperationViewModel(this, engine.Title, new OperationAction(OperationKind.VerifyEngine), async (operation, status, cancellationToken) =>
         {
             operation.SetPhase(Strings.PhaseReadingManifest);
             var install = local.Load() ?? throw new InvalidOperationException(Strings.ManifestUnreadable);
@@ -562,23 +575,23 @@ public partial class MainViewModel : ViewModelBase
             operation.SetPhase(Strings.PhaseVerifying);
             var bad = await Verifier.FindBadFilesAsync(files, install.Directory, status, cancellationToken: cancellationToken);
             if (bad.Count == 0)
-                return Localized.Plural(nameof(Strings.VerifyAllOK_Other), files.Count);
+                return Localized.Plural(nameof(Strings.VerifyDetailAllOK_Other), files.Count);
 
-            operation.OfferFollowUp(Strings.Repair, () => StartRepair(engine, install, bad)); // the message beside it says how many
-            return Localized.Plural(nameof(Strings.VerifyBad_Other), bad.Count, files.Count);
+            operation.OfferFollowUp(Strings.Repair, () => StartRepair(engine, install, bad)); // the line beside it says how many
+            return Localized.Plural(nameof(Strings.VerifyDetailBad_Other), bad.Count, files.Count);
         }, [engine.AppName]));
     }
 
     private void StartRepair(EngineCardViewModel engine, ExistingInstall install, IReadOnlyList<BadFile> bad)
     {
-        StartOperation(new OperationViewModel(this, Localized.Format(Strings.OperationRepairing, engine.Title), async (operation, status, cancellationToken) =>
+        StartOperation(new OperationViewModel(this, engine.Title, new OperationAction(OperationKind.RepairEngine), async (operation, status, cancellationToken) =>
         {
             if (install.Sources.Count == 0)
                 throw new InstallException(Strings.NoDownloadLocation);
             operation.SetPhase(Strings.PhaseDownloading);
             var plan = InstallPlan.Create(install.Manifest, bad.Select(b => b.File));
             await CreateInstaller().InstallAsync(plan, install.Directory, install.Sources, new Dictionary<string, string>(), status, cancellationToken);
-            return Localized.Plural(nameof(Strings.Repaired_Other), plan.Files.Count);
+            return Localized.Plural(nameof(Strings.RepairDetail_Other), plan.Files.Count);
         }, [engine.AppName]));
     }
 

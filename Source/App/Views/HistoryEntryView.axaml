@@ -4,21 +4,33 @@
              x:Class="UnVault.App.Views.HistoryEntryView"
              x:DataType="vm:HistoryEntryViewModel">
 
-    <!-- A finished operation: what, how it ended and when, and a next step it offered (this session only) -->
-    <Grid ColumnDefinitions="*,Auto">
-        <StackPanel Spacing="3" VerticalAlignment="Center">
-            <StackPanel Orientation="Horizontal" Spacing="10">
-                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Title}" />
-                <TextBlock Text="{Binding OutcomeText}" Classes="small" VerticalAlignment="Center" Foreground="{StaticResource SuccessBrush}" IsVisible="{Binding IsCompleted}" />
-                <TextBlock Text="{Binding OutcomeText}" Classes="muted small" VerticalAlignment="Center" IsVisible="{Binding IsPaused}" />
-                <TextBlock Text="{Binding OutcomeText}" Classes="small" VerticalAlignment="Center" Foreground="{StaticResource DangerBrush}" IsVisible="{Binding IsFailed}" />
-            </StackPanel>
-            <TextBlock Text="{Binding Message}" Classes="muted small" TextWrapping="Wrap" IsVisible="{Binding HasMessage}" />
+    <UserControl.Styles>
+        <!-- How it ended, in one place on every row, so the eye can run down them -->
+        <Style Selector="Path.outcome">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="StrokeThickness" Value="1.8" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="VerticalAlignment" Value="Top" />
+            <Setter Property="Margin" Value="0,4,14,0" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- A finished operation: what it worked on, beneath it what happened, and when; and a next step it offered (this session only) -->
+    <Grid ColumnDefinitions="Auto,*,Auto">
+        <Path Classes="outcome" Data="M1.5,6.5 L4.5,9.5 L10.5,2.5" Stroke="{StaticResource SuccessBrush}" IsVisible="{Binding IsCompleted}" />
+        <Path Classes="outcome" Data="M4,2 V10 M8,2 V10" Stroke="{StaticResource MutedTextBrush}" IsVisible="{Binding IsPaused}" />
+        <Path Classes="outcome" Data="M2.5,2.5 L9.5,9.5 M9.5,2.5 L2.5,9.5" Stroke="{StaticResource DangerBrush}" IsVisible="{Binding IsFailed}" />
+
+        <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+            <TextBlock Text="{Binding Line}" Classes="muted small" TextWrapping="Wrap" IsVisible="{Binding HasLine}" />
         </StackPanel>
 
-        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center" Margin="16,0,0,0">
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center" Margin="16,0,0,0">
             <Button Content="{Binding FollowUpText}" Classes="accent" Command="{Binding RunFollowUpCommand}" IsVisible="{Binding HasFollowUp}" />
-            <TextBlock Text="{Binding WhenText}" Classes="muted small" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding TimeText}" Classes="muted small" VerticalAlignment="Center" />
         </StackPanel>
     </Grid>
 </UserControl>
