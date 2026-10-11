@@ -325,10 +325,13 @@ public class ScreenshotTests
         viewModel.ShowDownloadsCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
 
-        // The tab's dot shows while something runs, and no tab moves or grows for it.
-        Assert.True(viewModel.HasRunningOperations);
-        var dot = tabs[2].GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single();
-        Assert.True(dot.IsVisible);
+        // The tabs' lines: yellow under Engines for an engine's update; moving under Downloads only, while the engine installs.
+        // No tab moves or grows for them.
+        var marks = tabs.Select(t => t.GetVisualDescendants().OfType<TabMark>().Single()).ToList();
+        static (bool Working, bool Attention) Shown(TabMark mark) =>
+            (mark.FindControl<ProgressBar>("WorkingBar")!.IsVisible, mark.FindControl<Border>("AttentionLine")!.IsVisible);
+        Assert.True(viewModel.HasEngineUpdates);
+        Assert.Equal([(false, true), (false, false), (true, false)], marks.Select(Shown));
         Assert.Equal(placesBefore, tabs.Select(t => t.Bounds));
 
         // The ✕ beside Resume: a square as tall as Resume, inside the card.
@@ -345,6 +348,15 @@ public class ScreenshotTests
         page.ScrollToEnd();
         Dispatcher.UIThread.RunJobs();
         Save(window, "downloads-history.png");
+
+        // Once nothing runs, the failed operation makes the Downloads line yellow.
+        viewModel.Operations[0].State = OperationState.Cancelled;
+        viewModel.UpdateBusy();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal([(false, true), (false, false), (false, true)], marks.Select(Shown));
+        Assert.Equal("1 operation failed", ToolTip.GetTip(tabs[2]));
+        Assert.Equal(placesBefore, tabs.Select(t => t.Bounds));
+        Save(window, "downloads-attention.png");
     }
 
     [AvaloniaFact]
@@ -504,7 +516,7 @@ public class ScreenshotTests
         Save(window, "fab-library.png");
 
         // Greybox Tools has a newer build on Fab than its 5.7 download and its 5.7 install: its main button becomes Update
-        // (its usual action moves to the ⋯ menu), and the Library tab gets a dot.
+        // (its usual action moves to the ⋯ menu), and the Library tab a yellow line.
         Assert.True(blockout.HasUpdate);
         Assert.Equal(("Update", "Install to Engine"), (blockout.PrimaryText, blockout.ActionText));
         var edge = fab.Items.Single(i => i.Title == "Edge Smoother");

@@ -33,20 +33,24 @@
                             </Button>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                            <Button Content="{x:Static s:Strings.Engines}" Classes="tab" Classes.active="{Binding IsEnginesTab}" Command="{Binding ShowEnginesCommand}" />
-                            <!-- A tab's dot sits in the button's padding, outside the layout, so no tab moves when one shows -->
+                            <!-- Each tab's line: yellow when something there wants a look (an engine update, a Library item update,
+                                 a failed operation). Only Downloads moves, while anything runs: work shows in one place. -->
+                            <Button Classes="tab" Classes.active="{Binding IsEnginesTab}" Command="{Binding ShowEnginesCommand}" ToolTip.Tip="{Binding EngineUpdatesText}">
+                                <Panel>
+                                    <TextBlock Text="{x:Static s:Strings.Engines}" />
+                                    <views:TabMark NeedsAttention="{Binding HasEngineUpdates}" />
+                                </Panel>
+                            </Button>
                             <Button Classes="tab" Classes.active="{Binding IsFabTab}" Command="{Binding ShowFabCommand}" ToolTip.Tip="{Binding LibraryUpdatesText}">
                                 <Panel>
                                     <TextBlock Text="{x:Static s:Strings.Library}" />
-                                    <!-- Something in the library has a newer build on Fab -->
-                                    <Ellipse Classes="tabDot" IsVisible="{Binding HasLibraryUpdates}" />
+                                    <views:TabMark NeedsAttention="{Binding HasLibraryUpdates}" />
                                 </Panel>
                             </Button>
-                            <Button Classes="tab" Classes.active="{Binding IsDownloadsTab}" Command="{Binding ShowDownloadsCommand}">
+                            <Button Classes="tab" Classes.active="{Binding IsDownloadsTab}" Command="{Binding ShowDownloadsCommand}" ToolTip.Tip="{Binding FailedOperationsText}">
                                 <Panel>
                                     <TextBlock Text="{x:Static s:Strings.Downloads}" />
-                                    <!-- Something is downloading, installing or otherwise working -->
-                                    <Ellipse Classes="tabDot" IsVisible="{Binding HasRunningOperations}" />
+                                    <views:TabMark IsWorking="{Binding HasRunningOperations}" NeedsAttention="{Binding HasFailedOperations}" />
                                 </Panel>
                             </Button>
                         </StackPanel>

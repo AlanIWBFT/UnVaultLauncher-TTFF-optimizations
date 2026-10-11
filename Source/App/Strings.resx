@@ -533,6 +533,20 @@
   <data name="ItemsHaveUpdates_Other" xml:space="preserve">
     <value>{0:N0} items have updates on Fab</value>
   </data>
+  <data name="EnginesHaveUpdates_One" xml:space="preserve">
+    <value>{0:N0} engine has an update</value>
+    <comment>Tooltip of the Engines tab.</comment>
+  </data>
+  <data name="EnginesHaveUpdates_Other" xml:space="preserve">
+    <value>{0:N0} engines have updates</value>
+  </data>
+  <data name="OperationsFailed_One" xml:space="preserve">
+    <value>{0:N0} operation failed</value>
+    <comment>Tooltip of the Downloads tab.</comment>
+  </data>
+  <data name="OperationsFailed_Other" xml:space="preserve">
+    <value>{0:N0} operations failed</value>
+  </data>
   <data name="InstalledCheckingEpic_One" xml:space="preserve">
     <value>{0:N0} installed  ·  Checking Epic for versions and updates…</value>
     <comment>{0}: engines found on this PC.</comment>

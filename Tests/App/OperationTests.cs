@@ -292,15 +292,39 @@ public sealed class OperationTests : IDisposable
         }
     }
 
+    /// <summary>The tabs' lines: the Downloads tab's moves while anything runs; a failed operation or an engine update wants a look.</summary>
     [AvaloniaFact]
-    public async Task The_Downloads_tab_shows_a_dot_while_something_runs()
+    public async Task Tabs_are_underlined_while_work_runs_or_something_wants_a_look()
     {
         var viewModel = WithEngines();
+        var raised = new List<string?>();
+        viewModel.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
         Assert.False(viewModel.HasRunningOperations);
+
         var download = new Started(viewModel, "Garden Pack", Does(OperationKind.Download, "5.7"), [], "fab:garden").Start();
+        var verify = new Started(viewModel, "Unreal Engine 5.6", Does(OperationKind.VerifyEngine), ["UE_5.6"]).Start();
         Assert.True(viewModel.HasRunningOperations);
         await download.PauseAsync();
+        Assert.True(viewModel.HasRunningOperations);
+        raised.Clear();
+        await verify.PauseAsync();
         Assert.False(viewModel.HasRunningOperations); // paused: nothing is going on
+        Assert.Contains(nameof(MainViewModel.HasRunningOperations), raised);
+
+        // Failed: until it's retried or put in the history.
+        Assert.False(viewModel.HasFailedOperations);
+        raised.Clear();
+        var failed = await FailedAsync(viewModel, "Greybox Tools", Does(OperationKind.InstallPlugin, "5.7"), ["UE_5.7"]);
+        Assert.Equal((true, "1 operation failed"), (viewModel.HasFailedOperations, viewModel.FailedOperationsText));
+        Assert.Contains(nameof(MainViewModel.HasFailedOperations), raised);
+        failed.MoveToHistoryCommand.Execute(null);
+        Assert.Equal((false, null), (viewModel.HasFailedOperations, viewModel.FailedOperationsText));
+
+        // An engine Epic has a newer build of.
+        Assert.False(viewModel.HasEngineUpdates);
+        viewModel.SetEngines([new LocalEngine("UE_5.7", @"E:\Epic Games\UE_5.7", "build-1", 1, LocalInstallKind.UnVault)],
+            [new EpicAsset { AppName = "UE_5.7", BuildVersion = "build-2", Namespace = "ue", CatalogItemID = "test" }]);
+        Assert.Equal((true, "1 engine has an update"), (viewModel.HasEngineUpdates, viewModel.EngineUpdatesText));
     }
 
     /// <summary>Entries saved before operations kept their parts hold a sentence each: they show as they were.</summary>

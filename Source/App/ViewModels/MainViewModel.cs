@@ -38,7 +38,7 @@ public partial class MainViewModel : ViewModelBase
         Operations.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasOperations));
-            OnPropertyChanged(nameof(HasRunningOperations));
+            OperationsChanged();
         };
         History = [.. OperationHistory.Load(_historyPath).Select(record => new HistoryEntryViewModel(record))];
         History.CollectionChanged += (_, _) =>
@@ -65,7 +65,7 @@ public partial class MainViewModel : ViewModelBase
 
     public FabLibraryViewModel Fab { get; }
 
-    /// <summary>Shows the dot on the Library tab.</summary>
+    /// <summary>Underlines the Library tab in yellow.</summary>
     public bool HasLibraryUpdates => Fab.UpdateCount > 0;
 
     public string? LibraryUpdatesText =>
@@ -96,8 +96,28 @@ public partial class MainViewModel : ViewModelBase
     public ObservableCollection<OperationViewModel> Operations { get; } = [];
     public bool HasOperations => Operations.Count > 0;
 
-    /// <summary>Shows the dot on the Downloads tab.</summary>
+    // Tab underlines: yellow while something there wants a look; the Downloads tab's moves while anything runs.
+
+    /// <summary>Something is downloading, installing or otherwise working.</summary>
     public bool HasRunningOperations => Operations.Any(o => o.IsRunning);
+
+    public bool HasEngineUpdates => Engines.Any(e => e.HasUpdate);
+
+    public string? EngineUpdatesText => Engines.Count(e => e.HasUpdate) is > 0 and var count
+        ? Localized.Plural(nameof(Strings.EnginesHaveUpdates_Other), count) : null;
+
+    /// <summary>One failed and waits to be retried or put in the history.</summary>
+    public bool HasFailedOperations => Operations.Any(o => o.IsFailed);
+
+    public string? FailedOperationsText => Operations.Count(o => o.IsFailed) is > 0 and var count
+        ? Localized.Plural(nameof(Strings.OperationsFailed_Other), count) : null;
+
+    private void OperationsChanged()
+    {
+        OnPropertyChanged(nameof(HasRunningOperations));
+        OnPropertyChanged(nameof(HasFailedOperations));
+        OnPropertyChanged(nameof(FailedOperationsText));
+    }
 
     /// <summary>Finished operations, newest first: this session's and earlier ones'.</summary>
     public ObservableCollection<HistoryEntryViewModel> History { get; }
@@ -392,6 +412,8 @@ public partial class MainViewModel : ViewModelBase
         foreach (var engine in engines)
             Engines.Add(engine);
         HasNoEngines = Engines.Count == 0;
+        OnPropertyChanged(nameof(HasEngineUpdates));
+        OnPropertyChanged(nameof(EngineUpdatesText));
     }
 
     /// <summary>An operation is working on the engine, so nothing else may start on it.</summary>
@@ -421,7 +443,7 @@ public partial class MainViewModel : ViewModelBase
             engine.IsBusy = IsEngineBusy(engine.AppName);
         Fab.UpdateBusy();
         (Dialog as IShowsBusy)?.UpdateBusy();
-        OnPropertyChanged(nameof(HasRunningOperations));
+        OperationsChanged();
     }
 
     /// <summary>An operation is working on the Library item.</summary>
