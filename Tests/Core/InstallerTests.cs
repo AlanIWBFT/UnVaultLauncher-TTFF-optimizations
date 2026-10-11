@@ -319,6 +319,18 @@ public sealed class InstallerTests : IDisposable
         Assert.Equal(["extra"], InstallRecord.TryRead(_dir)!.InstallTags);
         Assert.Equal(extra, File.ReadAllBytes(Path.Combine(_dir, "Engine/Extra.bin")));
         Assert.DoesNotContain(cdn.Requests, r => r.Contains(extraFirst.GUID.ToString())); // resumed
+
+        // An install EGL made has no record of ours, so its components are judged by the files on disk. Adding one that
+        // stops halfway leaves files that pass for it: the record of what's there is written first, and says otherwise.
+        File.Delete(InstallRecord.RecordPath(_dir));
+        File.Delete(Path.Combine(_dir, "Engine/Extra.bin"));
+        var fromEGL = new ExistingInstall("UE_9.9", _dir, manifest, manifestPath, Tags(), sources, "Epic Games Launcher install");
+        var add = InstallWorkflow.PlanModify(fromEGL, Tags("extra"));
+        Assert.Empty(add.ToRemove);
+        await Assert.ThrowsAsync<InstallException>(() => InstallWorkflow.ApplyModifyAsync(add,
+            new Installer(new HttpClient(broken)) { MaxParallelDownloads = 1, RetryBaseDelay = TimeSpan.FromMilliseconds(1), GiveUpAfter = TimeSpan.Zero }, new InstallStatus(), default));
+        Assert.Contains("extra", manifest.DetectInstalledTags(_dir));
+        Assert.Empty(InstallRecord.TryRead(_dir)!.InstallTags);
     }
 
     [Theory]

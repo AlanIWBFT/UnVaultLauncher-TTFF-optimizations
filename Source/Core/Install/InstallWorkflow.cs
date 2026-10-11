@@ -125,13 +125,17 @@ public static class InstallWorkflow
             throw new InstallException("Can't add components: no download location is known for this install.");
         byte[] rawManifest = await File.ReadAllBytesAsync(install.ManifestPath, cancellationToken);
 
-        InstallCleaner.Result cleaned = default;
-        if (plan.ToRemove.Count > 0)
+        // Recorded before any file changes, also for an install EGL made, which has no record yet: without one, components
+        // are judged by the files on disk, where an added one stopped halfway would pass for installed.
+        if (plan.ToRemove.Count > 0 || install.Record is null)
         {
             var kept = install.InstallTags.Where(plan.NewTags.Contains).ToHashSet(StringComparer.Ordinal);
             install.ToRecord(kept).Save(install.Directory, rawManifest);
-            cleaned = await Task.Run(() => InstallCleaner.DeleteFiles(install.Directory, plan.ToRemove, cancellationToken), cancellationToken);
         }
+
+        InstallCleaner.Result cleaned = default;
+        if (plan.ToRemove.Count > 0)
+            cleaned = await Task.Run(() => InstallCleaner.DeleteFiles(install.Directory, plan.ToRemove, cancellationToken), cancellationToken);
 
         if (plan.ToAdd is not null)
             await installer.InstallAsync(plan.ToAdd, install.Directory, install.Sources, new Dictionary<string, string>(), status, cancellationToken);
