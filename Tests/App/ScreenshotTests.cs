@@ -671,6 +671,22 @@ public class ScreenshotTests
             (Math.Round(leftmost.TranslatePoint(default, window)!.Value.X, 1), Math.Round(rightmost.TranslatePoint(new Point(rightmost.Bounds.Width, 0), window)!.Value.X, 1));
     }
 
+    /// <summary>The window can't get narrower than three Library tiles a row: two left a gap the width of a third.</summary>
+    [AvaloniaFact]
+    public void The_smallest_window_fits_three_tiles_a_row()
+    {
+        var viewModel = SampleMainViewModel();
+        SampleFab(viewModel);
+        var window = Show(viewModel);
+        viewModel.IsFabTab = true;
+        window.Width = window.MinWidth;
+        window.Height = window.MinHeight;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(3, viewModel.Fab.Columns);
+        Save(window, "fab-library-smallest.png");
+    }
+
     /// <summary>The tile height is fixed, so the fullest tile possible must still fit it: no line or button cut off.</summary>
     [AvaloniaFact]
     public void The_fullest_tile_fits_the_fixed_tile_height()
