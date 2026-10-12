@@ -80,7 +80,7 @@ public sealed class ProjectPluginTests : IDisposable
 
     /// <summary>
     /// Builds go to short names in the app's data folder, as the compiler's tools refuse long paths; a root that won't take
-    /// a folder hands over to the next. Only the folders builds were given are ever deleted.
+    /// a folder hands over to the next. Only the folders builds were given are ever deleted, and none a build may be in.
     /// </summary>
     [Fact]
     public void Builds_go_to_a_short_folder_and_only_theirs_are_cleared()
@@ -93,6 +93,7 @@ public sealed class ProjectPluginTests : IDisposable
             string blocked = Path.Combine(here, "not a folder");
             File.WriteAllText(blocked, "x"); // a file where the first root would be
             string root = Path.Combine(here, "UnVaultBuild");
+            string earlier = Directory.CreateDirectory(Path.Combine(root, "0f0f")).FullName; // one closing the app cut short
             PluginBuilder.BuildRoots = [blocked, root];
 
             string first = PluginBuilder.NewBuildFolder(), second = PluginBuilder.NewBuildFolder();
@@ -100,14 +101,20 @@ public sealed class ProjectPluginTests : IDisposable
             Assert.Matches("^[0-9a-f]{4}$", Path.GetFileName(first));
             Assert.NotEqual(first, second);
             string keep = Directory.CreateDirectory(Path.Combine(root, "someone else's")).FullName;
+            string elsewhere = Directory.CreateDirectory(Path.Combine(here, "elsewhere")).FullName;
 
             PluginBuilder.DeleteBuild(first);
+            PluginBuilder.DeleteBuild(Path.Combine(elsewhere, "a1b2")); // named like one, but not in a root: its folder stays
             Assert.False(Directory.Exists(first));
+            Assert.True(Directory.Exists(elsewhere));
+
+            // At the start: what earlier runs left goes, but not the second, made since: a build may be in it.
             PluginBuilder.ClearBuilds();
-            Assert.Equal([keep], Directory.EnumerateDirectories(root));
+            Assert.False(Directory.Exists(earlier));
+            Assert.Equal(new[] { keep, second }.Order(), Directory.EnumerateDirectories(root).Order());
 
             Directory.Delete(keep);
-            PluginBuilder.DeleteBuild(PluginBuilder.NewBuildFolder());
+            PluginBuilder.DeleteBuild(second);
             Assert.False(Directory.Exists(root)); // the root too, once nothing's in it
         }
         finally
@@ -124,12 +131,19 @@ public sealed class ProjectPluginTests : IDisposable
         try
         {
             PluginBuilder.BuildRoots = null!; // as it is outside tests
-            Assert.Equal([Path.Combine(AppPaths.DataDirectory, "b")], PluginBuilder.BuildRoots);
+            Assert.Equal([Path.Combine(AppPaths.DataDirectory, "temp")], PluginBuilder.BuildRoots);
         }
         finally
         {
             PluginBuilder.BuildRoots = roots;
         }
+    }
+
+    [Fact]
+    public void A_builds_log_is_named_after_the_plugin_and_engine_and_stays_in_the_logs_folder()
+    {
+        Assert.Equal(Path.Combine(AppPaths.LogsDirectory, "build-Cliffside0a1b2c3dV7_UE_5.6.log"), PluginBuilder.LogPath("Cliffside0a1b2c3dV7", "UE_5.6"));
+        Assert.Equal(Path.Combine(AppPaths.LogsDirectory, "build.log"), PluginBuilder.LogPath("Cliffside0a1b2c3dV7", @"UE_5.6\..\..\..\Elsewhere"));
     }
 
     [Fact]
@@ -187,6 +201,39 @@ public sealed class ProjectPluginTests : IDisposable
             "exit /b 6"));
         var named = await Assert.ThrowsAsync<InstallException>(() => PluginBuilder.BuildAsync(tooLong, plugin, output, log, null, default));
         Assert.StartsWith("The plugin's files are named too long to build here", named.Message);
+    }
+
+    /// <summary>
+    /// The engine's tool is a .bat, run through cmd: a name with &amp; in it mustn't end the command and start another, and
+    /// one that cmd would change even in quotes (% or !) is refused.
+    /// </summary>
+    [Fact]
+    public async Task A_plugins_name_never_becomes_part_of_a_command()
+    {
+        // No space in it, so nothing is quoted unless the build quotes it.
+        string dir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"unvault-names-{Guid.NewGuid():N}")).FullName;
+        try
+        {
+            string engine = Path.Combine(dir, "UE_5.6"), runUAT = PluginBuilder.RunUATPath(engine);
+            Directory.CreateDirectory(Path.GetDirectoryName(runUAT)!);
+            File.WriteAllText(runUAT, "@echo off\r\necho %2\r\n");
+            string plugin = Directory.CreateDirectory(Path.Combine(dir, "Rock&echo,INJECTED&")).FullName;
+            File.WriteAllText(Path.Combine(plugin, "Rock.uplugin"), "{}");
+            string log = Path.Combine(dir, "build.log");
+
+            await PluginBuilder.BuildAsync(engine, plugin, Path.Combine(dir, "a1b2"), log, null, default);
+
+            Assert.Equal([$"\"-Plugin={Path.Combine(plugin, "Rock.uplugin")}\""], File.ReadAllLines(log));
+
+            string odd = Directory.CreateDirectory(Path.Combine(dir, "Odd%PATH%")).FullName;
+            File.WriteAllText(Path.Combine(odd, "Odd.uplugin"), "{}");
+            var refused = await Assert.ThrowsAsync<InstallException>(() => PluginBuilder.BuildAsync(engine, odd, Path.Combine(dir, "a1b2"), log, null, default));
+            Assert.Contains("% or !", refused.Message);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]

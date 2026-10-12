@@ -3,7 +3,6 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UnVault.App.Services;
-using UnVault.Core;
 using UnVault.Core.EGL;
 using UnVault.Core.Epic;
 using UnVault.Core.Fab;
@@ -476,8 +475,7 @@ public partial class FabLibraryViewModel : ViewModelBase
                         operation.SetPhase(Localized.Format(Strings.PhaseCompilingWith, engineVersion));
                         try
                         {
-                            await PluginBuilder.BuildAsync(engine.Directory, folder, built,
-                                Path.Combine(AppPaths.LogsDirectory, $"build-{version.ArtifactID}_{engine.AppName}.log"),
+                            await PluginBuilder.BuildAsync(engine.Directory, folder, built, PluginBuilder.LogPath(version.ArtifactID, engine.AppName),
                                 (done, total) => operation.SetPhase(Localized.Format(Strings.PhaseCompilingWithSteps, engineVersion, done, total)), cancellationToken);
                         }
                         catch
