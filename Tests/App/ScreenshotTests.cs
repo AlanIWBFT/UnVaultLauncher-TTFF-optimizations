@@ -41,6 +41,12 @@ public class ScreenshotTests
         Assert.True(viewModel.Engines[0].IsStale);
         Assert.True(viewModel.Engines.Single(e => e.AppName == "UE_5.5").HasUpdate);
         Assert.Equal(["UE_5.8", "UE_5.4", "UE_4.26"], viewModel.InstallableEngines.Select(e => e.AppName));
+        Assert.Equal([true, false, false, true, false], viewModel.Engines.Select(e => e.ShowsStatus)); // only what needs a look
+
+        // Each card's picture is its version; screen readers still hear the name.
+        Assert.Equal(["5.8.3", "5.7.4", "5.6.1", "5.5.3", "4.27.2"], viewModel.Engines.Select(e => e.ShownVersion));
+        var tile = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("versionTile") && b.Classes.Contains("installed"));
+        Assert.Equal("Unreal Engine 5.7.4", AutomationProperties.GetName(tile));
         Save(window, "engines.png");
     }
 

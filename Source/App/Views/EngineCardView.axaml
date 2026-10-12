@@ -5,43 +5,47 @@
              x:Class="UnVault.App.Views.EngineCardView"
              x:DataType="vm:EngineCardViewModel">
 
-    <Border Classes="card" Padding="0" ClipToBounds="True">
-        <Panel>
-            <Border Classes="edge" Classes.installed="{Binding IsInstalled}" />
+    <Border Classes="card" Padding="0">
+        <!-- A card with one line of text (missing files) as tall as the others -->
+        <Grid ColumnDefinitions="Auto,*,Auto" MinHeight="72">
 
-            <Grid ColumnDefinitions="*,Auto" Margin="20,16,16,16">
+            <!-- The version, as the card's picture, filling its left side; a long one (4.27.2) shrinks to fit -->
+            <Border Classes="versionTile" Classes.installed="{Binding IsInstalled}" AutomationProperties.Name="{Binding Title}">
+                <Viewbox StretchDirection="DownOnly" Margin="9,0">
+                    <TextBlock Text="{Binding ShownVersion}" FontSize="24" />
+                </Viewbox>
+            </Border>
 
-                <StackPanel Margin="0,0,16,0" Spacing="4" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,0,0,6">
-                        <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <Border Classes="chip" Classes.success="{Binding IsUpToDate}" Classes.warning="{Binding HasUpdate}" Classes.danger="{Binding IsStale}">
-                            <TextBlock Text="{Binding StatusText}" />
-                        </Border>
-                        <Border Classes="chip" IsVisible="{Binding IsBusy}">
-                            <TextBlock Text="{x:Static s:Strings.Working}" />
-                        </Border>
-                    </StackPanel>
+            <StackPanel Grid.Column="1" Margin="20,16,16,16" Spacing="4" VerticalAlignment="Center">
+                <!-- Where it is, then a chip only for what needs a look (an update, missing files), and while it's busy -->
+                <WrapPanel ItemSpacing="8" LineSpacing="4">
                     <TextBlock Text="{Binding Details}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding Details, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                    <TextBlock Text="{Binding OriginText}" Classes="muted small" IsVisible="{Binding OriginText, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                </StackPanel>
+                    <Border Classes="chip compact" Classes.warning="{Binding HasUpdate}" Classes.danger="{Binding IsStale}" IsVisible="{Binding ShowsStatus}">
+                        <TextBlock Text="{Binding StatusText}" />
+                    </Border>
+                    <Border Classes="chip compact" IsVisible="{Binding IsBusy}">
+                        <TextBlock Text="{x:Static s:Strings.Working}" />
+                    </Border>
+                </WrapPanel>
+                <TextBlock Text="{Binding OriginText}" Classes="muted small" IsVisible="{Binding OriginText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <Button Content="{x:Static s:Strings.Launch}" Classes="accent" Command="{Binding LaunchCommand}" IsVisible="{Binding IsInstalled}" />
-                    <Button Content="{x:Static s:Strings.InstallEllipsis}" Classes="accent" Command="{Binding InstallCommand}" IsVisible="{Binding CanInstall}" />
-                    <Button Content="{x:Static s:Strings.Options}" Command="{Binding ModifyCommand}" IsVisible="{Binding IsInstalled}" />
-                    <Button Content="⋯" IsVisible="{Binding IsInstalled}" ToolTip.Tip="{x:Static s:Strings.More}" AutomationProperties.Name="{x:Static s:Strings.More}">
-                        <Button.Flyout>
-                            <MenuFlyout>
-                                <MenuItem Header="{x:Static s:Strings.InstalledPlugins}" Command="{Binding OpenPluginsCommand}" />
-                                <MenuItem Header="{x:Static s:Strings.VerifyFiles}" Command="{Binding VerifyCommand}" />
-                                <MenuItem Header="{x:Static s:Strings.InstallPrerequisites}" Command="{Binding InstallPrerequisitesCommand}"
-                                          ToolTip.Tip="{x:Static s:Strings.InstallPrerequisitesTip}" />
-                                <MenuItem Header="{x:Static s:Strings.ShowInFolder}" Command="{Binding OpenFolderCommand}" />
-                            </MenuFlyout>
-                        </Button.Flyout>
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Panel>
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="0,0,16,0" VerticalAlignment="Center">
+                <Button Content="{x:Static s:Strings.Launch}" Classes="accent" Command="{Binding LaunchCommand}" IsVisible="{Binding IsInstalled}" />
+                <Button Content="{x:Static s:Strings.InstallEllipsis}" Classes="accent" Command="{Binding InstallCommand}" IsVisible="{Binding CanInstall}" />
+                <Button Content="{x:Static s:Strings.Options}" Command="{Binding ModifyCommand}" IsVisible="{Binding IsInstalled}" />
+                <Button Content="⋯" IsVisible="{Binding IsInstalled}" ToolTip.Tip="{x:Static s:Strings.More}" AutomationProperties.Name="{x:Static s:Strings.More}">
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Header="{x:Static s:Strings.InstalledPlugins}" Command="{Binding OpenPluginsCommand}" />
+                            <MenuItem Header="{x:Static s:Strings.VerifyFiles}" Command="{Binding VerifyCommand}" />
+                            <MenuItem Header="{x:Static s:Strings.InstallPrerequisites}" Command="{Binding InstallPrerequisitesCommand}"
+                                      ToolTip.Tip="{x:Static s:Strings.InstallPrerequisitesTip}" />
+                            <MenuItem Header="{x:Static s:Strings.ShowInFolder}" Command="{Binding OpenFolderCommand}" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+            </StackPanel>
+        </Grid>
     </Border>
 </UserControl>

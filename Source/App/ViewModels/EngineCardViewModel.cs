@@ -35,8 +35,14 @@ public partial class EngineCardViewModel : ViewModelBase
     /// <summary>"5.8", or the raw suffix for variants like "4.27Chaos".</summary>
     public string VersionLabel => AppName.StartsWith("UE_", StringComparison.Ordinal) ? AppName[3..] : AppName;
 
-    /// <summary>The installed build, else the build an install would get, else what a stale record claims.</summary>
-    public string Title => "Unreal Engine " + EngineLibrary.ShortBuildVersion(Local?.BuildVersion ?? Owned?.BuildVersion ?? StaleRecord?.BuildVersion ?? VersionLabel);
+    /// <summary>The installed build, else the build an install would get, else what a stale record claims: "5.7.4".</summary>
+    public string ShownVersion => EngineLibrary.ShortBuildVersion(Local?.BuildVersion ?? Owned?.BuildVersion ?? StaleRecord?.BuildVersion ?? VersionLabel);
+
+    /// <summary>Its name elsewhere (operations, dialogs); the card itself shows only the version, on its tile.</summary>
+    public string Title => "Unreal Engine " + ShownVersion;
+
+    /// <summary>Only a status that needs a look gets a chip: an installed engine that's up to date needs none.</summary>
+    public bool ShowsStatus => HasUpdate || IsStale;
 
     public string StatusText =>
         HasUpdate ? Localized.Format(Strings.EngineUpdateAvailable, EngineLibrary.ShortBuildVersion(Owned!.BuildVersion))

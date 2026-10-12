@@ -79,14 +79,30 @@
             <Setter Property="BoxShadow" Value="0 12 40 0 #80000000" />
         </Style>
 
-        <!-- The bar along an engine card's left edge: blue when installed, grey when the files are gone -->
-        <Style Selector="Border.edge">
-            <Setter Property="Width" Value="3" />
-            <Setter Property="HorizontalAlignment" Value="Left" />
-            <Setter Property="Background" Value="#3A3A3A" />
+        <!-- An engine card's picture, its version on a tile: dark blue when installed (the buttons' bright blue would look
+             like one to click), grey when the files are gone -->
+        <Style Selector="Border.versionTile">
+            <Setter Property="Width" Value="88" />
+            <Setter Property="CornerRadius" Value="9,0,0,9" />
+            <Setter Property="Background" Value="#2A2A2A" />
         </Style>
-        <Style Selector="Border.edge.installed">
-            <Setter Property="Background" Value="{StaticResource AccentBrushUL}" />
+        <Style Selector="Border.versionTile.installed">
+            <Setter Property="Background">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Offset="0" Color="#3260BC" />
+                    <GradientStop Offset="1" Color="#182D66" />
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="Border.versionTile TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+        </Style>
+        <Style Selector="Border.versionTile.installed TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+            <Setter Property="Effect">
+                <DropShadowEffect OffsetX="0" OffsetY="1" BlurRadius="4" Color="Black" Opacity="0.6" />
+            </Setter>
         </Style>
 
         <!-- Status chips -->
@@ -100,6 +116,10 @@
             <Setter Property="FontSize" Value="11" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+        </Style>
+        <!-- A chip in a line of text (an engine card's): no taller than the text -->
+        <Style Selector="Border.chip.compact">
+            <Setter Property="Padding" Value="6,1" />
         </Style>
         <Style Selector="Border.chip.success">
             <Setter Property="Background" Value="#17301F" />
