@@ -657,18 +657,18 @@
     <value>{0:N0} installed  ·  Checking Epic for versions and updates…</value>
   </data>
   <data name="LibrarySummary_One" xml:space="preserve">
-    <value>{0:N0} item  ·  {1:N0} downloaded</value>
+    <value>{0:N0} Item  ·  {1:N0} Downloaded</value>
     <comment>{0}: items in the library, {1}: of them in the Vault Cache.</comment>
   </data>
   <data name="LibrarySummary_Other" xml:space="preserve">
-    <value>{0:N0} items  ·  {1:N0} downloaded</value>
+    <value>{0:N0} Items  ·  {1:N0} Downloaded</value>
   </data>
   <data name="LibraryFiltered_One" xml:space="preserve">
-    <value>{1:N0} of {0:N0} item</value>
+    <value>{1:N0} of {0:N0} Item</value>
     <comment>{0}: items in the library, {1}: items the search and filters leave.</comment>
   </data>
   <data name="LibraryFiltered_Other" xml:space="preserve">
-    <value>{1:N0} of {0:N0} items</value>
+    <value>{1:N0} of {0:N0} Items</value>
   </data>
   <data name="VaultAssets_One" xml:space="preserve">
     <value>{0:N0} downloaded asset ({1}). UnVault reuses it instead of downloading again.</value>
