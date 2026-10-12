@@ -60,10 +60,6 @@
             <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
             <Setter Property="Margin" Value="0,16,0,6" />
         </Style>
-        <!-- A page's title row: as tall as the Install Engine button beside the Engines title, so both tabs' titles line up -->
-        <Style Selector="Grid.title">
-            <Setter Property="MinHeight" Value="36" />
-        </Style>
 
         <!-- Cards -->
         <Style Selector="Border.card">
@@ -195,29 +191,50 @@
             <Setter Property="Background" Value="Transparent" />
         </Style>
         <!-- Header tabs: the active one stays highlighted, also on hover -->
+        <!-- Tabs: blocks standing on the line under them, as in the Epic Games Launcher, rounded on top like the rest; the
+             open one filled. The content fills the block, so a tab's dot (Views/TabMark) can sit in its top corner. -->
         <Style Selector="Button.tab">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="6,6,0,0" />
             <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
-            <!-- A button's usual padding, spelled out: a tab's line (Views/TabMark) sits in the bottom of it -->
-            <Setter Property="Padding" Value="8,5,8,6" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Padding" Value="22,0" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
         </Style>
-        <!-- The line under a tab (Views/TabMark), drawn like an engine card's edge: blue and moving while work runs, yellow
-             while something there wants a look -->
-        <Style Selector="ProgressBar.tabMark">
-            <Setter Property="MinWidth" Value="0" />
-            <Setter Property="MinHeight" Value="0" />
-            <Setter Property="Height" Value="3" />
-            <Setter Property="CornerRadius" Value="1.5" />
-            <Setter Property="Foreground" Value="{StaticResource AccentBrushUL}" />
-            <Setter Property="Background" Value="#1E2D4A" />
+        <Style Selector="Button.tab TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style Selector="Border.tabMark">
-            <Setter Property="CornerRadius" Value="1.5" />
-            <Setter Property="Background" Value="{StaticResource WarningBrush}" />
+        <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#1C1C1C" />
+            <Setter Property="Foreground" Value="#D6D6D6" />
+        </Style>
+        <Style Selector="Button.tab:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="#222222" />
+        </Style>
+        <!-- The dot on a tab (Views/TabMark): yellow while something there wants a look; blue, fading in and out, while
+             work runs -->
+        <Style Selector="Ellipse.tabMark">
+            <Setter Property="Fill" Value="{StaticResource AccentBrushUL}" />
+        </Style>
+        <Style Selector="Ellipse.tabMark.attention">
+            <Setter Property="Fill" Value="{StaticResource WarningBrush}" />
+        </Style>
+        <Style Selector="Ellipse.tabMark.working">
+            <Style.Animations>
+                <Animation Duration="0:0:0.9" IterationCount="Infinite" PlaybackDirection="Alternate" Easing="SineEaseInOut">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="Opacity" Value="1" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="Opacity" Value="0.2" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
         </Style>
         <Style Selector="Button.tab.active /template/ ContentPresenter#PART_ContentPresenter, Button.tab.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
-            <Setter Property="Background" Value="#2A2A2A" />
+            <Setter Property="Background" Value="#262626" />
             <Setter Property="Foreground" Value="White" />
         </Style>
         <!-- Yellow Update: replaces a Library tile's main button while Fab has a newer build -->

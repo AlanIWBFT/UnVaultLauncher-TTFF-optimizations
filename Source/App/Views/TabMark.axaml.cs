@@ -4,8 +4,8 @@ using Avalonia.Controls;
 namespace UnVault.App.Views;
 
 /// <summary>
-/// The line under a tab: blue and moving while work runs (the Downloads tab), yellow while something there wants a look.
-/// Work comes first; the yellow shows once it stops.
+/// The dot on a tab: yellow while something there wants a look; blue and pulsing while work runs (the Downloads tab). What
+/// wants a look comes first: it's waiting for the user, the work isn't.
 /// </summary>
 public partial class TabMark : UserControl
 {
@@ -30,6 +30,9 @@ public partial class TabMark : UserControl
         set => SetValue(NeedsAttentionProperty, value);
     }
 
+    /// <summary>What the dot shows now: (blue and pulsing, yellow).</summary>
+    internal (bool Working, bool Attention) Shown => (Dot.Classes.Contains("working"), Dot.Classes.Contains("attention"));
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -39,8 +42,9 @@ public partial class TabMark : UserControl
 
     private void Show()
     {
-        // Moving only while shown: a hidden bar's animation would keep running unseen.
-        WorkingBar.IsVisible = WorkingBar.IsIndeterminate = IsWorking;
-        AttentionLine.IsVisible = NeedsAttention && !IsWorking;
+        // Pulsing only while shown and blue: the animation runs while the class is on.
+        Dot.Classes.Set("attention", NeedsAttention);
+        Dot.Classes.Set("working", IsWorking && !NeedsAttention);
+        Dot.IsVisible = IsWorking || NeedsAttention;
     }
 }

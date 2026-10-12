@@ -1,11 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="UnVault.App.Views.TabMark"
-             Height="3" VerticalAlignment="Bottom" Margin="-2,0,-2,-6">
-    <!-- Along the tab's bottom edge, in its padding: the negative margins keep it out of the layout, so no tab moves when it
-         shows -->
-    <Panel>
-        <Border x:Name="AttentionLine" Classes="tabMark" />
-        <ProgressBar x:Name="WorkingBar" Classes="tabMark" />
-    </Panel>
+             Width="8" Height="8" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,9,-15,0">
+    <!-- In the tab's top right corner, over its side padding (see Button.tab): the negative margin keeps it out of the
+         layout, so no tab moves when it shows -->
+    <Ellipse x:Name="Dot" Classes="tabMark" />
 </UserControl>

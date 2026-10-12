@@ -9,17 +9,8 @@
     <!-- Header and grid share the page width with the Engines tab; the grid scrolls with its scroll bar at the window edge -->
     <Grid RowDefinitions="Auto,Auto,*">
 
+        <!-- Its loading progress and item count are on the tab row, beside the tabs -->
         <StackPanel Spacing="12" Margin="24,20,24,0" MaxWidth="{StaticResource PageMaxWidth}">
-            <Grid Classes="title" ColumnDefinitions="Auto,*,Auto">
-                <TextBlock Text="{x:Static s:Strings.Library}" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" />
-                <!-- Loading progress, next to the title (same place as on the Engines tab) -->
-                <DockPanel Grid.Column="1" Margin="20,0,12,0" VerticalAlignment="Center" IsVisible="{Binding IsLoading}">
-                    <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="120" />
-                    <TextBlock Text="{Binding LoadingText}" Classes="muted" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                </DockPanel>
-                <TextBlock Grid.Column="2" Text="{Binding Summary}" Classes="muted" VerticalAlignment="Center" />
-            </Grid>
-
             <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
                 <TextBox Text="{Binding SearchText}" PlaceholderText="{x:Static s:Strings.SearchYourLibrary}">
                     <TextBox.KeyBindings>

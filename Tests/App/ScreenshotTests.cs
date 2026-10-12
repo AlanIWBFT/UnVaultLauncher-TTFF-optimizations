@@ -355,13 +355,12 @@ public class ScreenshotTests
         viewModel.ShowDownloadsCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
 
-        // The tabs' lines: yellow under Engines for an engine's update; moving under Downloads only, while the engine installs.
-        // No tab moves or grows for them.
+        // The tabs' dots: yellow on Engines for an engine's update, and on Downloads for the failed operation, which comes
+        // before the engine installing there: it waits for the user. No tab moves or grows for them.
         var marks = tabs.Select(t => t.GetVisualDescendants().OfType<TabMark>().Single()).ToList();
-        static (bool Working, bool Attention) Shown(TabMark mark) =>
-            (mark.FindControl<ProgressBar>("WorkingBar")!.IsVisible, mark.FindControl<Border>("AttentionLine")!.IsVisible);
         Assert.True(viewModel.HasEngineUpdates);
-        Assert.Equal([(false, true), (false, false), (true, false)], marks.Select(Shown));
+        Assert.Equal([(false, true), (false, false), (false, true)], marks.Select(m => m.Shown));
+        Assert.Equal("1 operation failed", ToolTip.GetTip(tabs[2]));
         Assert.Equal(placesBefore, tabs.Select(t => t.Bounds));
 
         // The ✕ beside Resume: a square as tall as Resume, inside the card.
@@ -379,14 +378,20 @@ public class ScreenshotTests
         Dispatcher.UIThread.RunJobs();
         Save(window, "downloads-history.png");
 
-        // Once nothing runs, the failed operation makes the Downloads line yellow.
+        Save(window, "downloads-attention.png");
+
+        // The failed one put in the history: the dot shows the work still going on, in blue. Then nothing runs: no dot.
+        viewModel.Operations.Single(o => o.IsFailed).MoveToHistoryCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal((true, false), marks[2].Shown);
+        Assert.Null(ToolTip.GetTip(tabs[2]));
+        Save(window, "downloads-working.png");
         viewModel.Operations[0].State = OperationState.Cancelled;
         viewModel.UpdateBusy();
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal([(false, true), (false, false), (false, true)], marks.Select(Shown));
-        Assert.Equal("1 operation failed", ToolTip.GetTip(tabs[2]));
+        Assert.Equal((false, false), marks[2].Shown);
+        Assert.False(marks[2].GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single().IsVisible);
         Assert.Equal(placesBefore, tabs.Select(t => t.Bounds));
-        Save(window, "downloads-attention.png");
     }
 
     [AvaloniaFact]
@@ -615,29 +620,32 @@ public class ScreenshotTests
             window.Width = width;
             viewModel.IsFabTab = false;
             Dispatcher.UIThread.RunJobs();
-            var engines = Edges(window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Unreal Engine" && t.FontSize == 22),
-                window.GetVisualDescendants().OfType<EngineCardView>().First());
+            var tabs = window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("tab")).ToList();
+            var tabRow = tabs[0].FindAncestorOfType<Border>()!; // the line the tabs stand on
+            var card = window.GetVisualDescendants().OfType<EngineCardView>().First();
+            var engines = Edges(card, card);
             Save(window, $"engines-{width}.png");
 
             viewModel.IsFabTab = true;
             Dispatcher.UIThread.RunJobs();
             var tiles = window.GetVisualDescendants().OfType<FabItemView>().Where(t => t.IsEffectivelyVisible).ToList();
             var firstRow = tiles.Where(t => Math.Abs(t.TranslatePoint(default, window)!.Value.Y - tiles[0].TranslatePoint(default, window)!.Value.Y) < 1).ToList();
-            var library = Edges(window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Library" && t.FontSize == 22),
-                firstRow.MaxBy(t => t.TranslatePoint(default, window)!.Value.X)!);
+            var search = window.GetVisualDescendants().OfType<TextBox>().First(t => t.IsEffectivelyVisible);
+            var library = Edges(search, firstRow.MaxBy(t => t.TranslatePoint(default, window)!.Value.X)!);
             Save(window, $"fab-library-{width}.png");
 
-            // Same left and right edges and title height on both tabs; tiles keep their size and the gaps spread a full row to the page's right edge.
-            Assert.Equal(engines.Left, library.Left, 1);
-            Assert.Equal(engines.Right, library.Right, 1);
-            Assert.Equal(engines.Top, library.Top, 1);
+            // The tabs' line, the engine cards and the Library share the page's edges; tiles keep their size and the gaps
+            // spread a full row to the page's right edge.
+            var line = Edges(tabRow, tabRow);
+            Assert.Equal((line.Left, line.Right), (engines.Left, engines.Right));
+            Assert.Equal((line.Left, line.Right), (library.Left, library.Right));
+            Assert.Equal(line.Left, tabs[0].TranslatePoint(default, window)!.Value.X, 1); // the first tab starts where the page does
             Assert.Equal(viewModel.Fab.Columns, firstRow.Count);
             Assert.All(firstRow, t => Assert.Equal((FabRowView.TileWidth, FabRowView.TileHeight), (t.Bounds.Width, t.Bounds.Height)));
         }
 
-        (double Left, double Right, double Top) Edges(Control heading, Control rightmost) =>
-            (heading.TranslatePoint(default, window)!.Value.X, rightmost.TranslatePoint(new Point(rightmost.Bounds.Width, 0), window)!.Value.X,
-             heading.TranslatePoint(default, window)!.Value.Y);
+        (double Left, double Right) Edges(Control leftmost, Control rightmost) =>
+            (Math.Round(leftmost.TranslatePoint(default, window)!.Value.X, 1), Math.Round(rightmost.TranslatePoint(new Point(rightmost.Bounds.Width, 0), window)!.Value.X, 1));
     }
 
     /// <summary>The tile height is fixed, so the fullest tile possible must still fit it: no line or button cut off.</summary>

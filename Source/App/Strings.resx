@@ -115,10 +115,6 @@
   <data name="SignOut" xml:space="preserve">
     <value>Sign Out</value>
   </data>
-  <data name="UnrealEngine" xml:space="preserve">
-    <value>Unreal Engine</value>
-    <comment>Title of the Engines tab. The engine's name; most languages keep it as it is.</comment>
-  </data>
   <data name="UpdateAvailable" xml:space="preserve">
     <value>Update available</value>
     <comment>Shown beside the version number when a newer release of UnVault Launcher is out.</comment>
