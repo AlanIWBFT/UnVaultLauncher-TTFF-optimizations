@@ -11,7 +11,7 @@ internal static class Services
 
     private static readonly Lazy<HttpClient> LazyHTTP = new(EpicHTTP.CreateClient);
     private static readonly Lazy<EpicAccount> LazyAccount = new(() => new EpicAccount(new EpicAuthClient(HTTP), SessionStore.Default));
-    private static readonly Lazy<EpicAPIClient> LazyAPI = new(() => new EpicAPIClient(HTTP, Account));
+    private static readonly Lazy<EpicAPIClient> LazyAPI = new(() => new EpicAPIClient(HTTP, Account) { ManifestCacheLimit = Settings.ManifestCacheLimit });
     private static readonly Lazy<AppSettings> LazySettings = new(() => AppSettings.Load());
 
     public static HttpClient HTTP => LazyHTTP.Value;

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UnVault.Core;
 using UnVault.Core.EGL;
+using UnVault.Core.Epic;
 using UnVault.Core.Util;
 using UnVault.Core.Vault;
 
@@ -73,6 +74,12 @@ public partial class SettingsViewModel : ViewModelBase
         foreach (string folder in current.ProjectDirectories ?? [])
             AddProjectFolder(folder);
         ParallelDownloads = current.ParallelDownloads;
+        ManifestCacheLimitMB = current.ManifestCacheLimitMB;
+        _ = Task.Run(() =>
+        {
+            string used = Localized.Format(Strings.ManifestCacheUsed, ByteSize.Format(ManifestCache.Size()));
+            Dispatcher.UIThread.Post(() => ManifestCacheUsed = used);
+        });
         CheckForUpdates = current.CheckForUpdates;
         CloseToTray = current.CloseToTray;
         UpdateVaultSummary();
@@ -91,6 +98,10 @@ public partial class SettingsViewModel : ViewModelBase
     [ObservableProperty] public partial string EngineInstallRoot { get; set; } = "";
     [ObservableProperty] public partial string VaultCacheDirectory { get; set; } = "";
     [ObservableProperty] public partial decimal? ParallelDownloads { get; set; }
+    [ObservableProperty] public partial decimal? ManifestCacheLimitMB { get; set; }
+
+    /// <summary>How much the manifest cache takes now; the limit is applied on Save.</summary>
+    [ObservableProperty] public partial string ManifestCacheUsed { get; set; } = "";
     [ObservableProperty] public partial bool CheckForUpdates { get; set; }
     [ObservableProperty] public partial bool CloseToTray { get; set; }
     [ObservableProperty] public partial string VaultSummary { get; set; } = "";
@@ -209,6 +220,7 @@ public partial class SettingsViewModel : ViewModelBase
         settings.VaultCacheDirectory = vault;
         settings.ProjectDirectories = projectFolders.Count == 0 ? null : projectFolders;
         settings.ParallelDownloads = (int)Math.Clamp(ParallelDownloads ?? AppSettings.DefaultParallelDownloads, 1, AppSettings.MaxParallelDownloads);
+        settings.ManifestCacheLimitMB = (int)Math.Clamp(ManifestCacheLimitMB ?? ManifestCache.DefaultLimitMB, 0, AppSettings.MaxManifestCacheMB);
         settings.CheckForUpdates = CheckForUpdates;
         settings.CloseToTray = CloseToTray;
         try

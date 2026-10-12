@@ -20,6 +20,9 @@ public sealed partial class EpicAPIClient(HttpClient http, EpicAccount account)
 
     /// <summary>The longest "retry after" from Epic that's waited out; asked to wait longer, the request fails with Epic's message.</summary>
     internal TimeSpan MaxRetryAfter { get; init; } = TimeSpan.FromMinutes(1);
+
+    /// <summary>The most room downloaded manifests may take in the <see cref="ManifestCache"/> (Settings); 0 keeps none.</summary>
+    public long ManifestCacheLimit { get; set; } = ManifestCache.DefaultLimitMB * 1024L * 1024;
     /// <summary>Everything the account owns that the launcher can install (engines, plugins, games).</summary>
     public Task<List<EpicAsset>> GetAssetsAsync(string platform = "Windows", string label = "Live", CancellationToken cancellationToken = default) =>
         GetJSONAsync(
@@ -41,7 +44,7 @@ public sealed partial class EpicAPIClient(HttpClient http, EpicAccount account)
 
     /// <summary>
     /// Downloads and parses a build's manifest, trying each CDN in turn. Verified against the SHA-1 from
-    /// the build info and cached under %LOCALAPPDATA%\UnVaultLauncher\manifests so repeat calls are instant.
+    /// the build info and kept in the <see cref="ManifestCache"/>, so repeat calls are instant.
     /// </summary>
     public async Task<DownloadedManifest> DownloadManifestAsync(EpicBuildInfo build, CancellationToken cancellationToken = default)
     {
@@ -66,7 +69,10 @@ public sealed partial class EpicAPIClient(HttpClient http, EpicAccount account)
         {
             byte[] cached = await File.ReadAllBytesAsync(cachePath, cancellationToken);
             if (await Task.Run(() => HashMatches(cached, expectedSHA1), cancellationToken))
+            {
+                ManifestCache.Touch(cachePath);
                 return cached;
+            }
         }
 
         var errors = new List<string>();
@@ -82,8 +88,10 @@ public sealed partial class EpicAPIClient(HttpClient http, EpicAccount account)
                     continue;
                 }
 
-                if (cacheable)
-                    await Task.Run(() => SaveToCache(cachePath, data)); // an engine's is big; keep the writing off the UI thread
+                // An engine's is big: the writing (and making room) stays off the UI thread.
+                long limit = ManifestCacheLimit;
+                if (cacheable && data.Length <= limit)
+                    await Task.Run(() => SaveToCache(cachePath, data, limit));
                 return data;
             }
             catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
@@ -97,12 +105,13 @@ public sealed partial class EpicAPIClient(HttpClient http, EpicAccount account)
     }
 
     /// <summary>Only a speed-up for next time, so a failed write (another download writing the same file, a full disk) isn't one.</summary>
-    private static void SaveToCache(string path, byte[] data)
+    private static void SaveToCache(string path, byte[] data, long limit)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             AtomicFile.WriteAllBytes(path, data);
+            ManifestCache.Prune(limit, Path.GetDirectoryName(path));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

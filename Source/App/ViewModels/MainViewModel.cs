@@ -61,7 +61,19 @@ public partial class MainViewModel : ViewModelBase
     public bool CloseToTray => Settings.CloseToTray;
 
     /// <summary>Settings were saved: what follows them right away catches up.</summary>
-    internal void SettingsSaved() => OnPropertyChanged(nameof(CloseToTray));
+    internal void SettingsSaved()
+    {
+        OnPropertyChanged(nameof(CloseToTray));
+        PruneManifestCache(); // the limit may be lower now
+    }
+
+    /// <summary>Applies the limit from Settings and makes room, in the background: it's only a cache.</summary>
+    private void PruneManifestCache()
+    {
+        long limit = Settings.ManifestCacheLimit;
+        Services.API.ManifestCacheLimit = limit;
+        _ = Task.Run(() => ManifestCache.Prune(limit));
+    }
 
     public FabLibraryViewModel Fab { get; }
 
@@ -285,6 +297,7 @@ public partial class MainViewModel : ViewModelBase
     {
         if (Settings.CheckForUpdates)
             _ = CheckForUpdatesAsync(); // alongside; it never throws
+        PruneManifestCache();
         await RefreshAsync();
         if (IsSignedIn && !Fab.HasLoaded && !Fab.IsLoading)
             await Fab.LoadAsync(includeLibrary: true);

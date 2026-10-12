@@ -499,6 +499,17 @@
   <data name="ParallelDownloadsHint" xml:space="preserve">
     <value>More can be faster on fast connections; fewer is gentler on slow ones.</value>
   </data>
+  <data name="ManifestCacheLimit" xml:space="preserve">
+    <value>Manifest cache size, MB</value>
+    <comment>Setting: the most room the cache of downloaded manifests may take.</comment>
+  </data>
+  <data name="ManifestCacheHint" xml:space="preserve">
+    <value>Downloaded manifests are kept for reuse. Unused ones go after 30 days.</value>
+  </data>
+  <data name="ManifestCacheUsed" xml:space="preserve">
+    <value>Using {0} now.</value>
+    <comment>{0}: the room the manifest cache takes, e.g. 822 MB.</comment>
+  </data>
   <data name="RemoveFolder" xml:space="preserve">
     <value>Remove Folder</value>
     <comment>Screen reader name of the button that takes a folder off the list of project folders.</comment>

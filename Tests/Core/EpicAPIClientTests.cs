@@ -128,6 +128,36 @@ public sealed class EpicAPIClientTests : IDisposable
         Assert.Equal(["one.test", "two.test"], epic.Requests.Select(r => new Uri(r).Host));
     }
 
+    /// <summary>A downloaded manifest is kept for next time unless it's bigger than the cache's whole limit.</summary>
+    [Fact]
+    public async Task A_manifest_is_cached_within_the_limit()
+    {
+        string app = "TestApp" + Guid.NewGuid().ToString("N")[..8];
+        byte[] manifest = Encoding.UTF8.GetBytes(JSONManifestBuilder.Build(app, "1.0", ("Engine/Readme.txt", 10)));
+        var epic = new FakeEpic((_, _) => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(manifest) });
+        string hash = Convert.ToHexString(SHA1.HashData(manifest));
+        var build = new EpicBuildInfo
+        {
+            AppName = app, BuildVersion = "1.0", Hash = hash, Manifests = [new EpicManifestLocation { URI = "https://one.test/CloudDir/build.manifest" }],
+        };
+        string cached = Path.Combine(AppPaths.ManifestCacheDirectory, $"{app}_{hash}.manifest");
+
+        var tooSmall = Client(epic);
+        tooSmall.ManifestCacheLimit = manifest.Length - 1;
+        await tooSmall.DownloadManifestAsync(build);
+        Assert.False(File.Exists(cached));
+
+        var client = Client(epic);
+        await client.DownloadManifestAsync(build);
+        Assert.True(File.Exists(cached));
+        File.SetLastWriteTimeUtc(cached, DateTime.UtcNow.AddDays(-20));
+        await client.DownloadManifestAsync(build);
+
+        Assert.Equal(2, epic.Requests.Count); // the third came from the cache
+        Assert.True(File.GetLastWriteTimeUtc(cached) > DateTime.UtcNow.AddMinutes(-1)); // and counts as used now
+        File.Delete(cached);
+    }
+
     /// <summary>A client signed in with a session good for hours, so no token refresh goes out.</summary>
     private EpicAPIClient Client(FakeEpic epic, HttpClient? http = null)
     {

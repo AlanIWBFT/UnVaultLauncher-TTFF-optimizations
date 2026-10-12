@@ -65,6 +65,15 @@
                         <NumericUpDown Grid.Column="1" Value="{Binding ParallelDownloads}" Minimum="1" Maximum="64" Increment="1"
                                        FormatString="0" Width="130" />
                     </Grid>
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,12,0,0">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{x:Static s:Strings.ManifestCacheLimit}" />
+                            <TextBlock Text="{x:Static s:Strings.ManifestCacheHint}" Classes="muted small" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding ManifestCacheUsed}" Classes="muted small" />
+                        </StackPanel>
+                        <NumericUpDown Grid.Column="1" Value="{Binding ManifestCacheLimitMB}" Minimum="0" Maximum="102400" Increment="128"
+                                       FormatString="0" Width="130" Margin="16,0,0,0" VerticalAlignment="Center" />
+                    </Grid>
 
                     <TextBlock Text="{x:Static s:Strings.SectionSystem}" Classes="section" />
                     <CheckBox Content="{x:Static s:Strings.CheckForUpdatesAtStartup}" IsChecked="{Binding CheckForUpdates}" />
