@@ -23,6 +23,8 @@ public partial class App : Application
         {
             var viewModel = new MainViewModel(new AppServices());
             var window = new MainWindow { DataContext = viewModel };
+            WindowPlacement.Load()?.ApplyTo(window); // as it was when last closed
+            WindowPlacement.Remember(window);
             viewModel.Interaction = window;
             desktop.MainWindow = window;
             SystemTray.Add(this, desktop, window, viewModel);
