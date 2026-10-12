@@ -277,7 +277,7 @@ public static class FabWorkflow
         }, launcherInstalledPath);
     }
 
-    private static void RequirePlugin(Manifest manifest, string title)
+    internal static void RequirePlugin(Manifest manifest, string title)
     {
         if (FabKinds.FromManifest(manifest) != FabItemKind.Plugin)
             throw new InstallException($"{title} isn't an engine plugin, so it can't be installed into an engine.");
@@ -285,13 +285,20 @@ public static class FabWorkflow
             throw new InstallException($"{title} has files outside a plugin folder ({outside.Filename}), so it isn't installed into an engine.");
     }
 
+    /// <summary>Copies manifest files from one root to another; see <see cref="CopyAsync"/>.</summary>
+    internal static Task CopyFilesAsync(string sourceRoot, string targetRoot, IReadOnlyCollection<FileManifest> files, InstallStatus status, CancellationToken cancellationToken) =>
+        CopyAsync([.. files.Select(f => new FileCopy(Path.Combine(sourceRoot, f.Filename), f.Filename, f.FileSize))], targetRoot, status, cancellationToken);
+
+    /// <summary>A file to copy: its full path, and where it goes relative to the target folder.</summary>
+    internal readonly record struct FileCopy(string Source, string Target, long Size);
+
     /// <summary>
-    /// Copies manifest files from one root to another, reporting progress in bytes and files. Each file is copied beside
-    /// its target first and then moved over it, so a cancel or a full disk never leaves a cut-off file in its place.
+    /// Copies files into a folder, reporting progress in bytes and files. Each file is copied beside its target first and
+    /// then moved over it, so a cancel or a full disk never leaves a cut-off file in its place.
     /// </summary>
-    internal static async Task CopyFilesAsync(string sourceRoot, string targetRoot, IReadOnlyCollection<FileManifest> files, InstallStatus status, CancellationToken cancellationToken)
+    internal static async Task CopyAsync(IReadOnlyCollection<FileCopy> files, string targetRoot, InstallStatus status, CancellationToken cancellationToken)
     {
-        status.WriteTotal = files.Sum(f => f.FileSize);
+        status.WriteTotal = files.Sum(f => f.Size);
         status.FilesTotal = files.Count;
         string root = Path.GetFullPath(targetRoot);
         byte[] buffer = new byte[1024 * 1024];
@@ -299,10 +306,10 @@ public static class FabWorkflow
         foreach (var file in files)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string source = Path.Combine(sourceRoot, file.Filename);
-            string target = ContainedPath.Resolve(root, file.Filename, "target folder");
+            string source = file.Source;
+            string target = ContainedPath.Resolve(root, file.Target, "target folder");
             if (!File.Exists(source))
-                throw new InstallException($"The downloaded copy is incomplete: {file.Filename} is missing. Download it again.");
+                throw new InstallException($"The downloaded copy is incomplete: {file.Target} is missing. Download it again.");
 
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             if (File.Exists(target) && File.GetAttributes(target).HasFlag(FileAttributes.ReadOnly))

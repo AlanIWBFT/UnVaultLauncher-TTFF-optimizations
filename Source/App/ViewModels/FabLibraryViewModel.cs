@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UnVault.App.Services;
+using UnVault.Core;
 using UnVault.Core.EGL;
 using UnVault.Core.Epic;
 using UnVault.Core.Fab;
@@ -391,6 +392,8 @@ public partial class FabLibraryViewModel : ViewModelBase
 
     internal async void OpenRemove(FabItemViewModel item) => await OpenDialogAsync(item, FabActionMode.RemovePlugin);
 
+    internal async void OpenInstallToProject(FabItemViewModel item) => await OpenDialogAsync(item, FabActionMode.InstallToProject);
+
     private async Task OpenDialogAsync(FabItemViewModel item, FabActionMode mode)
     {
         if (item.IsBusy)
@@ -439,6 +442,60 @@ public partial class FabLibraryViewModel : ViewModelBase
                 int files = await FabWorkflow.AddToProjectAsync(entry, project.Directory, copy, cancellationToken);
                 return Localized.Plural(nameof(Strings.AddDetail_Other), files, project.Directory);
             }, fabItemKey: item.Key))]);
+    }
+
+    /// <summary>
+    /// The plugin into each project's Plugins folder, one after another, compiled first with <paramref name="compileWith"/>
+    /// when it's given. Projects taking the same version share its download and its compile.
+    /// </summary>
+    internal void StartInstallToProject(FabItemViewModel item, IEnumerable<(FabVersion Version, UnrealProject Project)> targets, LocalEngine? compileWith)
+    {
+        var list = targets.ToList();
+        var downloaded = new ConcurrentDictionary<string, VaultEntry>(StringComparer.OrdinalIgnoreCase); // by artifact
+        var compiled = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // A compiled copy goes once the last project taking it has it; one a stop leaves behind goes at the next start.
+        var takers = new ConcurrentDictionary<string, int>(list.GroupBy(t => t.Version.ArtifactID, StringComparer.OrdinalIgnoreCase)
+            .Select(g => KeyValuePair.Create(g.Key, g.Count())), StringComparer.OrdinalIgnoreCase);
+        IReadOnlyList<string> engines = compileWith is null ? [] : [compileWith.AppName]; // not changed while it compiles
+
+        Owner.StartOperations([.. list.Select(target => new OperationViewModel(Owner, item.Title,
+            new OperationAction(OperationKind.InstallToProject, target.Project.Name), async (operation, status, cancellationToken) =>
+            {
+                var (version, project) = target;
+                if (!downloaded.TryGetValue(version.ArtifactID, out var entry))
+                    downloaded[version.ArtifactID] = entry = await EnsureInVaultAsync(item, version, operation, status, cancellationToken);
+                string folder = await Task.Run(() => ProjectPlugins.FolderIn(entry), cancellationToken);
+                if (compileWith is { } engine)
+                {
+                    string engineVersion = engine.AppName[3..];
+                    if (!compiled.TryGetValue(version.ArtifactID, out var built))
+                    {
+                        if (!FileNames.IsPlain(version.ArtifactID))
+                            throw new InstallException(Localized.Format(Strings.ArtifactNotAFolderName, version.ArtifactID));
+                        built = PluginBuilder.NewBuildFolder();
+                        operation.SetPhase(Localized.Format(Strings.PhaseCompilingWith, engineVersion));
+                        try
+                        {
+                            await PluginBuilder.BuildAsync(engine.Directory, folder, built,
+                                Path.Combine(AppPaths.LogsDirectory, $"build-{version.ArtifactID}_{engine.AppName}.log"),
+                                (done, total) => operation.SetPhase(Localized.Format(Strings.PhaseCompilingWithSteps, engineVersion, done, total)), cancellationToken);
+                        }
+                        catch
+                        {
+                            PluginBuilder.DeleteBuild(built); // a stopped or failed build is started anew
+                            throw;
+                        }
+                        compiled[version.ArtifactID] = built;
+                    }
+                    folder = built;
+                }
+
+                var copy = operation.BeginPhase(Strings.PhaseCopyingIntoProject);
+                var (installedTo, _) = await ProjectPlugins.InstallAsync(folder, project.Directory, copy, cancellationToken);
+                if (compileWith is not null && takers.AddOrUpdate(version.ArtifactID, 0, (_, left) => left - 1) == 0)
+                    await Task.Run(() => PluginBuilder.DeleteBuild(folder));
+                return compileWith is { } used ? Localized.Format(Strings.InstallToProjectDetailCompiled, used.AppName[3..], installedTo) : installedTo;
+            }, engines, fabItemKey: item.Key))]);
     }
 
     internal void StartCreateProject(FabItemViewModel item, FabVersion version, string targetDirectory)

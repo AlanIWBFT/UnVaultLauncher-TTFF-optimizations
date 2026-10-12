@@ -16,6 +16,7 @@ internal static class TestSetup
     {
         string folder = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"unvault-tests-{Guid.NewGuid():N}")).FullName;
         AppPaths.UseDataDirectory(folder);
+        Core.Fab.PluginBuilder.BuildRoots = [Path.Combine(folder, "builds")]; // plugin builds too, which the app clears at start
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
             try

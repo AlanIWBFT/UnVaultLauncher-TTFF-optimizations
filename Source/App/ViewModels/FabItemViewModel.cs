@@ -151,7 +151,7 @@ public partial class FabItemViewModel : ViewModelBase
     /// <summary>An operation is working on this item's files; nothing else may start on them until it ends.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsIdle), nameof(ShowsInstalledMark), nameof(ShowsDownloadedMark))]
-    [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(RemoveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(RemoveCommand), nameof(InstallToProjectCommand))]
     public partial bool IsBusy { get; set; }
 
     public bool IsIdle => !IsBusy;
@@ -224,6 +224,12 @@ public partial class FabItemViewModel : ViewModelBase
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private void Remove() => _owner.OpenRemove(this);
+
+    /// <summary>Plugins only: into a project's Plugins folder rather than an engine.</summary>
+    public bool ShowsInstallToProject => Kind == FabItemKind.Plugin;
+
+    [RelayCommand(CanExecute = nameof(IsIdle))]
+    private void InstallToProject() => _owner.OpenInstallToProject(this);
 
     /// <summary>["UE_4.27","UE_5.3","UE_5.4","UE_5.5"] → "4.27, 5.3–5.5".</summary>
     internal static string CompactVersions(IEnumerable<string> engineAppNames)

@@ -12,6 +12,7 @@ internal static class TestSetup
     {
         string folder = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"unvault-tests-{Guid.NewGuid():N}")).FullName;
         AppPaths.UseDataDirectory(folder);
+        Fab.PluginBuilder.BuildRoots = [Path.Combine(folder, "builds")]; // plugin builds too
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
             try
@@ -29,6 +30,9 @@ internal static class TestSetup
 public class TestSetupTests
 {
     [Fact]
-    public void Tests_never_touch_the_real_data_folder() =>
+    public void Tests_never_touch_the_real_data_folder()
+    {
         Assert.StartsWith(Path.GetTempPath(), AppPaths.DataDirectory, StringComparison.OrdinalIgnoreCase);
+        Assert.All(Fab.PluginBuilder.BuildRoots, root => Assert.StartsWith(AppPaths.DataDirectory, root, StringComparison.OrdinalIgnoreCase));
+    }
 }

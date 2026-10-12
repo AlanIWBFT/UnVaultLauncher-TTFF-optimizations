@@ -66,6 +66,7 @@
                     <Button.Flyout>
                         <MenuFlyout>
                             <MenuItem Header="{Binding ActionText}" Command="{Binding ActionCommand}" IsVisible="{Binding HasUpdate}" IsEnabled="{Binding IsIdle}" />
+                            <MenuItem Header="{x:Static s:Strings.InstallToProject}" Command="{Binding InstallToProjectCommand}" IsVisible="{Binding ShowsInstallToProject}" />
                             <MenuItem Header="{x:Static s:Strings.DownloadToVaultCache}" Command="{Binding DownloadCommand}" IsEnabled="{Binding IsInLibrary}" />
                             <MenuItem Header="{x:Static s:Strings.ShowInFolder}" Command="{Binding ShowInFolderCommand}" IsEnabled="{Binding HasFolder}" />
                             <MenuItem Header="{x:Static s:Strings.OpenOnFab}" Command="{Binding OpenFabPageCommand}" IsEnabled="{Binding HasFabPage}" />

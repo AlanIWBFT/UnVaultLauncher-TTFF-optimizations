@@ -354,6 +354,59 @@
     <value>Adding to {0}</value>
     <comment>{0}: the project's name.</comment>
   </data>
+  <data name="ActionInstallToProjectRunning" xml:space="preserve">
+    <value>Installing into {0}</value>
+    <comment>A plugin into a project. {0}: the project's name.</comment>
+  </data>
+  <data name="ActionInstallToProjectDone" xml:space="preserve">
+    <value>Installed into {0}</value>
+    <comment>A plugin into a project. {0}: the project's name.</comment>
+  </data>
+  <data name="ActionInstallToProjectName" xml:space="preserve">
+    <value>Install into {0}</value>
+    <comment>As in "Install into Hillside failed: …". {0}: the project's name.</comment>
+  </data>
+  <data name="InstallToProject" xml:space="preserve">
+    <value>Install to Project</value>
+    <comment>A plugin's menu item: into a project's Plugins folder rather than an engine.</comment>
+  </data>
+  <data name="ActionTitleInstallToProject" xml:space="preserve">
+    <value>Install {0} into projects</value>
+    <comment>{0}: a Fab plugin.</comment>
+  </data>
+  <data name="TipOlderPluginVersion" xml:space="preserve">
+    <value>This plugin has no {0} version, so its {1} version is installed. Its binaries are built for UE {1}: recompile it for {0}.</value>
+    <comment>{0}: the project's engine version, {1}: an older one.</comment>
+  </data>
+  <data name="RecompileWith" xml:space="preserve">
+    <value>Recompile with</value>
+    <comment>Followed by a choice of installed engine, e.g. Unreal Engine 5.6.</comment>
+  </data>
+  <data name="RecompileHint" xml:space="preserve">
+    <value>For a project on an engine the plugin's binaries weren't built for. Compiling takes a few minutes.</value>
+  </data>
+  <data name="RecompileNeedsVisualStudio" xml:space="preserve">
+    <value>Recompiling needs Visual Studio with C++ (the "Desktop development with C++" workload), which isn't on this PC.</value>
+  </data>
+  <data name="RecompileNeedsEngine" xml:space="preserve">
+    <value>Recompiling needs an installed engine to compile with.</value>
+  </data>
+  <data name="PhaseCompilingWith" xml:space="preserve">
+    <value>Compiling with UE {0}</value>
+    <comment>{0}: an engine version, e.g. 5.6.</comment>
+  </data>
+  <data name="PhaseCompilingWithSteps" xml:space="preserve">
+    <value>Compiling with UE {0}  ·  {1:N0} of {2:N0}</value>
+    <comment>{0}: an engine version; {1} of {2}: the build's steps done, as it counts them.</comment>
+  </data>
+  <data name="InstallToProjectDetailCompiled" xml:space="preserve">
+    <value>compiled with UE {0}  ·  {1}</value>
+    <comment>After a plugin's install into a project. {0}: an engine version, {1}: the plugin's folder in the project.</comment>
+  </data>
+  <data name="ArtifactNotAFolderName" xml:space="preserve">
+    <value>'{0}' can't be used as a folder name.</value>
+    <comment>{0}: a Fab download's ID.</comment>
+  </data>
   <data name="ActionCreateProjectRunning" xml:space="preserve">
     <value>Creating a project</value>
   </data>

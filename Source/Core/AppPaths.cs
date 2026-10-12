@@ -18,6 +18,9 @@ public static class AppPaths
 
     public static string ManifestCacheDirectory => Path.Combine(DataDirectory, "manifests");
 
+    /// <summary>What compiling a plugin printed, the latest for each plugin and engine.</summary>
+    public static string LogsDirectory => Path.Combine(DataDirectory, "logs");
+
     /// <summary>
     /// The data folder was called just "Unvault" before it was named after the product. Whatever is still in the
     /// old folder (sign-in, settings, caches) is moved over; where both have a file, the newer one is kept. Anything

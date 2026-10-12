@@ -21,6 +21,7 @@ public sealed record OperationAction(OperationKind Kind, string? Target = null)
         OperationKind.Download => Strings.ActionDownloadRunning,
         OperationKind.RemovePlugin => Strings.ActionRemovePluginRunning,
         OperationKind.InstallPrerequisites => Strings.ActionInstallPrerequisitesRunning,
+        OperationKind.InstallToProject => Strings.ActionInstallToProjectRunning,
         _ => Strings.ActionUpdateRunning,
     });
 
@@ -36,6 +37,7 @@ public sealed record OperationAction(OperationKind Kind, string? Target = null)
         OperationKind.Download => Strings.ActionDownloadDone,
         OperationKind.RemovePlugin => Strings.ActionRemovePluginDone,
         OperationKind.InstallPrerequisites => Strings.ActionInstallPrerequisitesDone,
+        OperationKind.InstallToProject => Strings.ActionInstallToProjectDone,
         _ => Strings.ActionUpdateDone,
     });
 
@@ -52,6 +54,7 @@ public sealed record OperationAction(OperationKind Kind, string? Target = null)
         OperationKind.Download => Strings.ActionDownloadName,
         OperationKind.RemovePlugin => Strings.ActionRemovePluginName,
         OperationKind.InstallPrerequisites => Strings.ActionInstallPrerequisitesName,
+        OperationKind.InstallToProject => Strings.ActionInstallToProjectName,
         _ => Strings.ActionUpdateName,
     });
 

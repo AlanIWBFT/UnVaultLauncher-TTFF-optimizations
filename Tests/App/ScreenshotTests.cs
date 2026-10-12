@@ -990,6 +990,63 @@ public class ScreenshotTests
         Assert.Equal(7, dialog.Targets.Count);
     }
 
+    /// <summary>
+    /// A plugin into projects' Plugins folders, from its More menu, compiled first with an installed engine when Visual
+    /// Studio is there to do it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Install_to_project_can_recompile_with_an_installed_engine()
+    {
+        var viewModel = SampleMainViewModel();
+        viewModel.IsFabTab = true;
+        SampleFab(viewModel);
+        var item = viewModel.Fab.Items.Single(i => i.Title == "Greybox Tools"); // for UE 4.27, 5.3, 5.5–5.7
+        Assert.True(item.ShowsInstallToProject);
+        Assert.False(viewModel.Fab.Items.Single(i => i.Title == "Street Vehicles").ShowsInstallToProject); // asset packs add content instead
+
+        var dialog = new FabActionViewModel(viewModel.Fab, item, FabActionMode.InstallToProject) { FindCompiler = () => true, CanCompileWith = _ => true };
+        viewModel.Dialog = dialog;
+        var window = Show(viewModel);
+        await dialog.LoadCompilersAsync();
+        dialog.ShowProjects([.. new[] { ("Hillside", "5.6"), ("Ridgeback", "5.8"), ("OldTown", "4.26") }
+            .Select(p => new UnrealProject(p.Item1, $@"D:\Projects\{p.Item1}\{p.Item1}.uproject", p.Item2, null))]);
+        FabTargetViewModel Row(string name) => dialog.Targets.Single(t => t.Title == name);
+
+        // The engines on this PC to compile with; none ticked to begin with.
+        Assert.Equal(["Unreal Engine 5.7", "Unreal Engine 5.6", "Unreal Engine 5.5", "Unreal Engine 4.27"], dialog.RecompileEngines.Select(e => e.Label));
+        Assert.Equal((true, null, false), (dialog.CanRecompile, dialog.RecompileNote, dialog.Recompile));
+        Assert.Empty(dialog.Chosen);
+
+        // A project with no version for its engine takes an older one, which needs compiling to load.
+        Assert.Equal("Last available from UE 5.7", Row("Ridgeback").Badge);
+        Assert.Equal("This plugin has no 5.8 version, so its 5.7 version is installed. Its binaries are built for UE 5.7: recompile it for 5.8.", Row("Ridgeback").BadgeTip);
+        Assert.False(Row("OldTown").CanCheck); // every version is for a newer engine
+
+        // The engine follows the first project ticked, until one is picked.
+        Row("Hillside").IsChecked = true;
+        Assert.Equal("Unreal Engine 5.6", dialog.RecompileEngine?.Label);
+        dialog.RecompileEngine = dialog.RecompileEngines[0];
+        Row("Ridgeback").IsChecked = true;
+        Row("Hillside").IsChecked = false;
+        Row("Hillside").IsChecked = true;
+        Assert.Equal("Unreal Engine 5.7", dialog.RecompileEngine?.Label);
+        dialog.Recompile = true;
+        Assert.True(dialog.ConfirmCommand.CanExecute(null));
+        Save(window, "fab-install-to-project.png");
+
+        // No Visual Studio: the tick can't be set, and the dialog says why.
+        var without = new FabActionViewModel(viewModel.Fab, item, FabActionMode.InstallToProject) { FindCompiler = () => false, CanCompileWith = _ => true };
+        viewModel.Dialog = without;
+        await without.LoadCompilersAsync();
+        without.ShowProjects([new UnrealProject("Hillside", @"D:\Projects\Hillside\Hillside.uproject", "5.6", null)]);
+        Assert.False(without.CanRecompile);
+        Assert.StartsWith("Recompiling needs Visual Studio with C++", without.RecompileNote);
+        Dispatcher.UIThread.RunJobs();
+        var tick = window.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Content as string == "Recompile with");
+        Assert.False(tick.IsEnabled);
+        Save(window, "fab-install-to-project-no-vs.png");
+    }
+
     /// <summary>The note says once that copies get downloaded, however many projects and versions take one.</summary>
     [AvaloniaFact]
     public void Adding_to_several_projects_tells_what_downloads_once()

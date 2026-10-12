@@ -10,7 +10,7 @@ using UnVault.Core.Util;
 
 namespace UnVault.App.ViewModels;
 
-public enum FabActionMode { InstallPlugin, AddToProject, CreateProject, Download, RemovePlugin }
+public enum FabActionMode { InstallPlugin, AddToProject, CreateProject, Download, RemovePlugin, InstallToProject }
 
 /// <summary>Something a Fab item can go into: an engine (plugins) or a project (asset packs).</summary>
 /// <param name="badge">Why it can't be picked, if anything rules it out for good.</param>
@@ -57,9 +57,11 @@ public sealed partial class FabTargetViewModel(string title, string subtitle, st
 
 public sealed record FabVersionOption(FabVersion Version, string Label);
 
+public sealed record FabEngineOption(LocalEngine Engine, string Label);
+
 /// <summary>
-/// The dialog behind a Fab row's buttons: tick the engines (plugin) or projects (asset pack) it goes into, or the engines
-/// to remove a plugin from, or pick the version and folder for a new project / a plain download.
+/// The dialog behind a Fab row's buttons: tick the engines (plugin) or projects (asset pack, or a plugin into projects) it
+/// goes into, or the engines to remove a plugin from, or pick the version and folder for a new project / a plain download.
 /// </summary>
 public partial class FabActionViewModel : ViewModelBase, IShowsBusy
 {
@@ -75,13 +77,14 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
         {
             FabActionMode.InstallPlugin => Localized.Format(Strings.ActionTitleInstall, item.Title),
             FabActionMode.AddToProject => Localized.Format(Strings.ActionTitleAddToProject, item.Title),
+            FabActionMode.InstallToProject => Localized.Format(Strings.ActionTitleInstallToProject, item.Title),
             FabActionMode.CreateProject => Localized.Format(Strings.ActionTitleCreateProject, item.Title),
             FabActionMode.RemovePlugin => Localized.Format(Strings.ActionTitleRemove, item.Title),
             _ => Localized.Format(Strings.ActionTitleDownload, item.Title),
         };
         ConfirmText = mode switch
         {
-            FabActionMode.InstallPlugin => Strings.Install,
+            FabActionMode.InstallPlugin or FabActionMode.InstallToProject => Strings.Install,
             FabActionMode.AddToProject => Strings.ActionAddToProject,
             FabActionMode.CreateProject => Strings.ActionCreateProject,
             FabActionMode.RemovePlugin => Strings.Remove,
@@ -95,19 +98,22 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
     public string Subtitle { get; }
     public string ConfirmText { get; }
 
-    public bool ShowsTargets => Mode is FabActionMode.InstallPlugin or FabActionMode.AddToProject or FabActionMode.RemovePlugin;
+    public bool ShowsTargets => Mode is FabActionMode.InstallPlugin or FabActionMode.AddToProject or FabActionMode.RemovePlugin or FabActionMode.InstallToProject;
+
+    /// <summary>Goes into projects (an asset pack, or a plugin into their Plugins folders) rather than engines.</summary>
+    private bool ForProjects => Mode is FabActionMode.AddToProject or FabActionMode.InstallToProject;
 
     public bool ShowsVersionChoice => Mode is FabActionMode.CreateProject or FabActionMode.Download;
     public bool ShowsProjectLocation => Mode == FabActionMode.CreateProject;
-    public bool CanBrowseProject => Mode == FabActionMode.AddToProject;
-    public bool ShowsProjectSearch => Mode == FabActionMode.AddToProject;
-    public string TargetsHeading => Mode == FabActionMode.AddToProject ? Strings.SectionProjects : Strings.SectionEngines;
+    public bool CanBrowseProject => ForProjects;
+    public bool ShowsProjectSearch => ForProjects;
+    public string TargetsHeading => ForProjects ? Strings.SectionProjects : Strings.SectionEngines;
 
     public ObservableCollection<FabTargetViewModel> Targets { get; } = [];
 
     /// <summary>The ticked ones, in the list's order; for projects, also those the search hides.</summary>
     public IReadOnlyList<FabTargetViewModel> Chosen =>
-        [.. (Mode == FabActionMode.AddToProject ? _projects : (IEnumerable<FabTargetViewModel>)Targets).Where(t => t.IsChecked)];
+        [.. (ForProjects ? _projects : (IEnumerable<FabTargetViewModel>)Targets).Where(t => t.IsChecked)];
 
     /// <summary>How many are ticked, beside the buttons: the search can hide some of them.</summary>
     [ObservableProperty] public partial string? ChosenText { get; set; }
@@ -181,9 +187,64 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
             Note = notes.Count == 0 ? null : string.Join(Environment.NewLine, notes);
         }
         ChosenText = chosen.Count == 0 ? null
-            : Mode == FabActionMode.AddToProject ? Localized.Plural(nameof(Strings.ProjectsChosen_Other), chosen.Count)
+            : ForProjects ? Localized.Plural(nameof(Strings.ProjectsChosen_Other), chosen.Count)
             : Localized.Plural(nameof(Strings.EnginesChosen_Other), chosen.Count);
+        if (Mode == FabActionMode.InstallToProject && !_enginePicked && chosen.FirstOrDefault()?.Project?.EngineAppName is { } projectEngine
+            && RecompileEngines.FirstOrDefault(o => string.Equals(o.Engine.AppName, projectEngine, StringComparison.OrdinalIgnoreCase)) is { } match)
+            PickEngine(match); // the first project's engine, until the user picks one
         ConfirmCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Install to Project: compile the plugin with an installed engine first, for one its binaries weren't built for.</summary>
+    public bool ShowsRecompile => Mode == FabActionMode.InstallToProject;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    public partial bool Recompile { get; set; }
+
+    /// <summary>Visual Studio with C++ is on this PC, and an engine to compile with.</summary>
+    [ObservableProperty] public partial bool CanRecompile { get; set; }
+
+    /// <summary>Why recompiling can't be ticked; null when it can.</summary>
+    [ObservableProperty] public partial string? RecompileNote { get; set; }
+
+    public ObservableCollection<FabEngineOption> RecompileEngines { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    public partial FabEngineOption? RecompileEngine { get; set; }
+
+    /// <summary>Whether Visual Studio with C++ is there; tests answer it themselves.</summary>
+    internal Func<bool> FindCompiler { get; init; } = VisualStudio.HasCppCompiler;
+
+    /// <summary>Whether an engine has the tool to compile with; tests answer it themselves.</summary>
+    internal Func<LocalEngine, bool> CanCompileWith { get; init; } = engine => PluginBuilder.CanBuildWith(engine.Directory);
+
+    private bool _enginePicked, _pickingEngine;
+
+    partial void OnRecompileEngineChanged(FabEngineOption? value)
+    {
+        if (!_pickingEngine)
+            _enginePicked = true;
+    }
+
+    private void PickEngine(FabEngineOption? option)
+    {
+        _pickingEngine = true;
+        RecompileEngine = option;
+        _pickingEngine = false;
+    }
+
+    /// <summary>The engines to compile with, and whether Visual Studio is there. Separate from loading so tests can call it.</summary>
+    internal async Task LoadCompilersAsync()
+    {
+        foreach (var engine in _library.Owner.LocalEngines.Where(e => e.Exists && CanCompileWith(e)))
+            RecompileEngines.Add(new FabEngineOption(engine, $"Unreal Engine {engine.AppName[3..]}"));
+        bool compiler = await Task.Run(FindCompiler);
+        CanRecompile = compiler && RecompileEngines.Count > 0;
+        RecompileNote = !compiler ? Strings.RecompileNeedsVisualStudio : RecompileEngines.Count == 0 ? Strings.RecompileNeedsEngine : null;
+        if (RecompileEngine is null)
+            PickEngine(RecompileEngines.FirstOrDefault());
     }
 
     private bool SignedIn => _library.Owner.IsSignedIn;
@@ -200,6 +261,7 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
             {
                 case FabActionMode.InstallPlugin: LoadEngines(); break;
                 case FabActionMode.AddToProject: await LoadProjectsAsync(); break;
+                case FabActionMode.InstallToProject: await LoadCompilersAsync(); await LoadProjectsAsync(); break;
                 case FabActionMode.CreateProject: LoadVersions(onlyDownloadable: false); SetProjectDefaults(); break;
                 case FabActionMode.Download: LoadVersions(onlyDownloadable: true); break;
                 case FabActionMode.RemovePlugin: await LoadInstallsAsync(); break;
@@ -248,7 +310,7 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
             if (target.EngineAppName is { } app)
                 target.IsBusy = _library.Owner.IsEngineBusy(app);
         }
-        if (Mode != FabActionMode.AddToProject && !_ticked && Targets.FirstOrDefault(t => t.IsAvailable) is { } first)
+        if (!ForProjects && !_ticked && Targets.FirstOrDefault(t => t.IsAvailable) is { } first)
         {
             first.IsChecked = true;
             _ticked = true;
@@ -349,7 +411,8 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
         if (version is not null && !SameEngine(version.EngineAppName, engine))
         {
             badge = Localized.Format(Strings.BadgeLastAvailableFrom, Short(version.EngineAppName));
-            tip = Localized.Format(Strings.TipOlderVersionCanBeAdded, Short(engine), Short(version.EngineAppName));
+            tip = Localized.Format(Mode == FabActionMode.InstallToProject ? Strings.TipOlderPluginVersion : Strings.TipOlderVersionCanBeAdded,
+                Short(engine), Short(version.EngineAppName));
         }
         else if (version is null && !SignedIn && _item.Versions.Any(v => EngineLibrary.ParseVersion(v.EngineAppName) <= engineVersion))
         {
@@ -429,6 +492,7 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
     private bool CanConfirm() => Mode switch
     {
         FabActionMode.InstallPlugin or FabActionMode.AddToProject or FabActionMode.RemovePlugin => Chosen is { Count: > 0 } chosen && chosen.All(t => t.IsAvailable),
+        FabActionMode.InstallToProject => Chosen is { Count: > 0 } chosen && chosen.All(t => t.IsAvailable) && (!Recompile || RecompileEngine is not null),
         FabActionMode.CreateProject => SelectedVersion is not null && !string.IsNullOrWhiteSpace(ProjectName) && Path.IsPathFullyQualified(ProjectParent),
         _ => SelectedVersion is not null,
     };
@@ -444,6 +508,9 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
                 break;
             case FabActionMode.AddToProject:
                 _library.StartAddToProject(_item, Chosen.Select(t => (t.Version!, t.Project!)));
+                break;
+            case FabActionMode.InstallToProject:
+                _library.StartInstallToProject(_item, Chosen.Select(t => (t.Version!, t.Project!)), Recompile ? RecompileEngine?.Engine : null);
                 break;
             case FabActionMode.CreateProject:
                 _library.StartCreateProject(_item, SelectedVersion!.Version, Path.Combine(ProjectParent, ProjectName.Trim()));
@@ -468,7 +535,7 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
         : Mode switch
         {
             FabActionMode.InstallPlugin => null,
-            FabActionMode.AddToProject => Localized.Plural(nameof(Strings.NoteDownloadsAndAdds_Other), targets),
+            FabActionMode.AddToProject or FabActionMode.InstallToProject => Localized.Plural(nameof(Strings.NoteDownloadsAndAdds_Other), targets),
             FabActionMode.CreateProject => Strings.NoteDownloadsAndCreates,
             _ => Strings.NoteDownloadsReady,
         };

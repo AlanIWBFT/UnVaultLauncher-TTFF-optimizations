@@ -298,6 +298,7 @@ public partial class MainViewModel : ViewModelBase
         if (Settings.CheckForUpdates)
             _ = CheckForUpdatesAsync(); // alongside; it never throws
         PruneManifestCache();
+        _ = Task.Run(PluginBuilder.ClearBuilds); // what a build cut short by closing the app left
         await RefreshAsync();
         if (IsSignedIn && !Fab.HasLoaded && !Fab.IsLoading)
             await Fab.LoadAsync(includeLibrary: true);
