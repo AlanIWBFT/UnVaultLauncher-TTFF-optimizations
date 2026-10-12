@@ -178,6 +178,29 @@ public class ScreenshotTests
         Assert.False(viewModel.HasDialog);
     }
 
+    /// <summary>The version, refresh, settings and account (or sign-in) buttons line up as one row of the same height.</summary>
+    [AvaloniaFact]
+    public void Header_buttons_share_one_height()
+    {
+        var viewModel = SampleMainViewModel();
+        var window = Show(viewModel);
+        Button[] Header() => [.. window.GetVisualDescendants().OfType<Button>().Where(b => b.Classes.Contains("header") && b.IsEffectivelyVisible)];
+
+        var signedIn = Header();
+        Assert.Equal(4, signedIn.Length); // version, refresh, settings, account
+        Assert.All(signedIn, b => Assert.Equal(36, b.Bounds.Height));
+        Assert.All(signedIn.Where(b => b.Classes.Contains("icon")), b => Assert.Equal(b.Bounds.Height, b.Bounds.Width));
+        double middle = signedIn[0].TranslatePoint(new Point(0, 18), window)!.Value.Y;
+        Assert.All(signedIn, b => Assert.Equal(middle, b.TranslatePoint(new Point(0, 18), window)!.Value.Y, 1));
+        window.MouseMove(signedIn[0].TranslatePoint(new Point(20, 18), window)!.Value); // the version, highlighted
+        Dispatcher.UIThread.RunJobs();
+        Save(window, "header-version-hover.png");
+
+        viewModel.IsSignedIn = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.All(Header(), b => Assert.Equal(36, b.Bounds.Height)); // Sign In in the account's place
+    }
+
     /// <summary>Fluent shrinks a pressed button, which moves its text; its background showing the press is enough.</summary>
     [AvaloniaFact]
     public void Pressed_buttons_keep_their_size()

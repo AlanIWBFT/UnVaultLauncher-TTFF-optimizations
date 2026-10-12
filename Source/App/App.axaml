@@ -190,7 +190,17 @@
         <Style Selector="Button.subtle:disabled /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="Transparent" />
         </Style>
-        <!-- Header tabs: the active one stays highlighted, also on hover -->
+        <!-- Header buttons (version, refresh, settings, account): as tall as the account's, with its avatar; icons in squares -->
+        <Style Selector="Button.header">
+            <Setter Property="Height" Value="36" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.header.icon">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+        </Style>
         <!-- Tabs: blocks standing on the line under them, as in the Epic Games Launcher, rounded on top like the rest; the
              open one filled. The content fills the block, so a tab's dot (Views/TabMark) can sit in its top corner. -->
         <Style Selector="Button.tab">

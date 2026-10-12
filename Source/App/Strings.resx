@@ -496,7 +496,7 @@
     <value>More can be faster on fast connections; fewer is gentler on slow ones.</value>
   </data>
   <data name="ManifestCacheLimit" xml:space="preserve">
-    <value>Manifest cache size, MB</value>
+    <value>Manifest max cache size, MB</value>
     <comment>Setting: the most room the cache of downloaded manifests may take.</comment>
   </data>
   <data name="ManifestCacheHint" xml:space="preserve">
