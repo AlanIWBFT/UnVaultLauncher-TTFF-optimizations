@@ -1014,7 +1014,7 @@ public class ScreenshotTests
 
         // The engines on this PC to compile with; none ticked to begin with.
         Assert.Equal(["Unreal Engine 5.7", "Unreal Engine 5.6", "Unreal Engine 5.5", "Unreal Engine 4.27"], dialog.RecompileEngines.Select(e => e.Label));
-        Assert.Equal((true, null, false), (dialog.CanRecompile, dialog.RecompileNote, dialog.Recompile));
+        Assert.Equal((true, null, false, false), (dialog.CanRecompile, dialog.RecompileNote, dialog.Recompile, dialog.NeedsVisualStudio));
         Assert.Empty(dialog.Chosen);
 
         // A project with no version for its engine takes an older one, which needs compiling to load.
@@ -1034,16 +1034,21 @@ public class ScreenshotTests
         Assert.True(dialog.ConfirmCommand.CanExecute(null));
         Save(window, "fab-install-to-project.png");
 
-        // No Visual Studio: the tick can't be set, and the dialog says why.
+        // No Visual Studio: the tick can't be set, and the dialog says why and where to read how to set it up.
         var without = new FabActionViewModel(viewModel.Fab, item, FabActionMode.InstallToProject) { FindCompiler = () => false, CanCompileWith = _ => true };
         viewModel.Dialog = without;
         await without.LoadCompilersAsync();
         without.ShowProjects([new UnrealProject("Hillside", @"D:\Projects\Hillside\Hillside.uproject", "5.6", null)]);
         Assert.False(without.CanRecompile);
-        Assert.StartsWith("Recompiling needs Visual Studio with C++", without.RecompileNote);
+        Assert.Equal("Recompiling needs Visual Studio with the C++ build toolchain, which isn't installed on this PC.", without.RecompileNote);
+        Assert.True(without.NeedsVisualStudio);
+        Assert.StartsWith("https://dev.epicgames.com/", FabActionViewModel.VisualStudioGuideURL);
         Dispatcher.UIThread.RunJobs();
         var tick = window.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Content as string == "Recompile with");
         Assert.False(tick.IsEnabled);
+        var guide = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Setting up Visual Studio for Unreal Engine (Epic's guide)");
+        Assert.True(guide.IsEffectivelyVisible);
+        Assert.Same(without.OpenVisualStudioGuideCommand, guide.Command);
         Save(window, "fab-install-to-project-no-vs.png");
     }
 

@@ -386,7 +386,11 @@
     <value>For a project on an engine the plugin's binaries weren't built for. Compiling takes a few minutes.</value>
   </data>
   <data name="RecompileNeedsVisualStudio" xml:space="preserve">
-    <value>Recompiling needs Visual Studio with C++ (the "Desktop development with C++" workload), which isn't on this PC.</value>
+    <value>Recompiling needs Visual Studio with the C++ build toolchain, which isn't installed on this PC.</value>
+  </data>
+  <data name="VisualStudioGuide" xml:space="preserve">
+    <value>Setting up Visual Studio for Unreal Engine</value>
+    <comment>A link under the note that Visual Studio is missing; opens Epic's page of that name.</comment>
   </data>
   <data name="RecompileNeedsEngine" xml:space="preserve">
     <value>Recompiling needs an installed engine to compile with.</value>

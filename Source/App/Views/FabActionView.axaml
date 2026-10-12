@@ -101,6 +101,8 @@
                         <TextBlock Text="{x:Static s:Strings.RecompileHint}" Classes="muted small" TextWrapping="Wrap" IsVisible="{Binding CanRecompile}" />
                         <TextBlock Text="{Binding RecompileNote}" Classes="small" Foreground="{StaticResource WarningBrush}" TextWrapping="Wrap"
                                    IsVisible="{Binding RecompileNote, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <Button Classes="link" FontSize="12" HorizontalAlignment="Left" Content="{x:Static s:Strings.VisualStudioGuide}"
+                                Command="{Binding OpenVisualStudioGuideCommand}" IsVisible="{Binding NeedsVisualStudio}" />
                     </StackPanel>
                     <TextBlock Text="{Binding EmptyText}" Classes="muted" TextWrapping="Wrap"
                                IsVisible="{Binding EmptyText, Converter={x:Static ObjectConverters.IsNotNull}}" />

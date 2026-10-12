@@ -208,6 +208,15 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
     /// <summary>Why recompiling can't be ticked; null when it can.</summary>
     [ObservableProperty] public partial string? RecompileNote { get; set; }
 
+    /// <summary>Visual Studio with C++ isn't on this PC: the note links to Epic's guide to setting it up.</summary>
+    [ObservableProperty] public partial bool NeedsVisualStudio { get; set; }
+
+    /// <summary>Epic's guide to setting up Visual Studio for Unreal Engine: which parts of it to install.</summary>
+    public const string VisualStudioGuideURL = "https://dev.epicgames.com/documentation/unreal-engine/setting-up-visual-studio-development-environment-for-cplusplus-projects-in-unreal-engine";
+
+    [RelayCommand]
+    private void OpenVisualStudioGuide() => _library.Owner.OpenURL(VisualStudioGuideURL);
+
     public ObservableCollection<FabEngineOption> RecompileEngines { get; } = [];
 
     [ObservableProperty]
@@ -242,6 +251,7 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
             RecompileEngines.Add(new FabEngineOption(engine, $"Unreal Engine {engine.AppName[3..]}"));
         bool compiler = await Task.Run(FindCompiler);
         CanRecompile = compiler && RecompileEngines.Count > 0;
+        NeedsVisualStudio = !compiler;
         RecompileNote = !compiler ? Strings.RecompileNeedsVisualStudio : RecompileEngines.Count == 0 ? Strings.RecompileNeedsEngine : null;
         if (RecompileEngine is null)
             PickEngine(RecompileEngines.FirstOrDefault());
