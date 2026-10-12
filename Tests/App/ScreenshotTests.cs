@@ -1046,7 +1046,7 @@ public class ScreenshotTests
         Dispatcher.UIThread.RunJobs();
         var tick = window.GetVisualDescendants().OfType<CheckBox>().Single(c => c.Content as string == "Recompile with");
         Assert.False(tick.IsEnabled);
-        var guide = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "Setting up Visual Studio for Unreal Engine (Epic's guide)");
+        var guide = window.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == Strings.VisualStudioGuide);
         Assert.True(guide.IsEffectivelyVisible);
         Assert.Same(without.OpenVisualStudioGuideCommand, guide.Command);
         Save(window, "fab-install-to-project-no-vs.png");
