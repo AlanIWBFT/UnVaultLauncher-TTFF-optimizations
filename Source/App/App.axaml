@@ -134,6 +134,11 @@
         <Style Selector="ListBoxItem:selected:pressed /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="#1A263E" />
         </Style>
+        <!-- A pressed button keeps its size (Fluent shrinks it): its background already shows the press, and its text stays put -->
+        <Style Selector=":is(Button):pressed">
+            <Setter Property="RenderTransform" Value="{x:Null}" />
+        </Style>
+
         <!-- Rows to tick (the engines or projects to install into): ticked ones tinted like selected rows -->
         <Style Selector="Border.target">
             <Setter Property="Background" Value="Transparent" />

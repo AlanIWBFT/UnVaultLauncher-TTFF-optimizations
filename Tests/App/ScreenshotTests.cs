@@ -178,6 +178,35 @@ public class ScreenshotTests
         Assert.False(viewModel.HasDialog);
     }
 
+    /// <summary>Fluent shrinks a pressed button, which moves its text; its background showing the press is enough.</summary>
+    [AvaloniaFact]
+    public void Pressed_buttons_keep_their_size()
+    {
+        Button[] buttons =
+        [
+            new() { Content = "Launch" }, new() { Content = "Install", Classes = { "accent" } }, new() { Content = "Engines", Classes = { "tab" } },
+            new Avalonia.Controls.Primitives.ToggleButton { Content = "Toggle" }, new RepeatButton { Content = "▲" }, new DropDownButton { Content = "More" },
+        ];
+        var panel = new StackPanel();
+        foreach (var button in buttons)
+            panel.Children.Add(button);
+        var window = new Window { Width = 300, Height = 400, Content = panel };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        foreach (var button in buttons)
+        {
+            var center = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+            window.MouseDown(center, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(":pressed", button.Classes);
+            // What the styles say, not where the theme's animation has got to.
+            var transform = button.GetBaseValue(Visual.RenderTransformProperty).GetValueOrDefault();
+            Assert.True(transform is null || transform.Value.IsIdentity, $"{button.GetType().Name} {button.Content} shrinks when pressed");
+            window.MouseUp(center, MouseButton.Left);
+        }
+    }
+
     [AvaloniaFact]
     public void Icon_only_buttons_have_names_for_screen_readers()
     {
