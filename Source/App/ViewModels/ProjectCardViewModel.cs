@@ -1,6 +1,7 @@
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UnVault.App.Services;
 using UnVault.Core.Projects;
 using UnVault.Core.Util;
 
@@ -68,4 +69,15 @@ public partial class ProjectCardViewModel(ProjectsViewModel owner, UnrealProject
 
     [RelayCommand]
     private void ShowInFolder() => owner.ShowInFolder(this);
+
+    /// <summary>The user's categories, for its menu: each ticked when it's in it.</summary>
+    public IReadOnlyList<ProjectCategory> Categories => owner.SortedCategories;
+
+    public bool IsIn(ProjectCategory category) => category.Contains(Project.ProjectFile);
+
+    [RelayCommand]
+    private void ToggleCategory(ProjectCategory category) => owner.ToggleCategory(category, this);
+
+    [RelayCommand]
+    private void NewCategory() => owner.AskNewCategory(this);
 }

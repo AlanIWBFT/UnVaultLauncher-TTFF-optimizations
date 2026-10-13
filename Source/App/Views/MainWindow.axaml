@@ -294,6 +294,9 @@
                         <DataTemplate DataType="vm:InstalledPluginsViewModel">
                             <views:InstalledPluginsView />
                         </DataTemplate>
+                        <DataTemplate DataType="vm:CategoryNameViewModel">
+                            <views:CategoryNameView />
+                        </DataTemplate>
                     </ContentControl.DataTemplates>
                 </ContentControl>
                 <!-- Under a question, the dialog is dimmed as the page is under it; the page isn't dimmed a second time -->

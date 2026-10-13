@@ -6,6 +6,30 @@
              x:Class="UnVault.App.Views.ProjectsView"
              x:DataType="vm:ProjectsViewModel">
 
+    <UserControl.Styles>
+        <!-- A group's heading: its name and count, the whole line a button that folds it -->
+        <Style Selector="Button.groupHeading">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Margin" Value="-6,0,0,0" />
+            <Setter Property="FontSize" Value="15" />
+        </Style>
+        <Style Selector="Path.chevron">
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Stroke" Value="{StaticResource MutedTextBrush}" />
+            <Setter Property="StrokeThickness" Value="1.6" />
+            <Setter Property="StrokeLineCap" Value="Round" />
+            <Setter Property="StrokeJoin" Value="Round" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- Folded: pointing right, at the projects it hides -->
+        <Style Selector="Path.chevron.folded">
+            <Setter Property="RenderTransform" Value="rotate(-90deg)" />
+        </Style>
+    </UserControl.Styles>
+
     <!-- The search box, then the projects: two columns, one when the window is narrow. Loading and the count are on the tab row. -->
     <Grid RowDefinitions="Auto,*">
 
@@ -28,15 +52,43 @@
                     <TextBlock Text="{Binding EmptyHint}" Classes="muted" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
                                IsVisible="{Binding EmptyHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
                 </StackPanel>
-                <ItemsControl ItemsSource="{Binding Items}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <views:ColumnsPanel MinColumnWidth="{x:Static views:ProjectsView.MinColumnWidth}" MaxColumns="2" Spacing="12" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
+                <!-- The categories, each under a heading that folds it (its ⋯ renames or deletes it), then the projects in none.
+                     With no categories, just the projects. -->
+                <ItemsControl ItemsSource="{Binding Groups}">
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="vm:ProjectCardViewModel">
-                            <views:ProjectCardView />
+                        <DataTemplate DataType="vm:ProjectGroupViewModel">
+                            <StackPanel>
+                                <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8" IsVisible="{Binding HasHeading}">
+                                    <Button Classes="groupHeading" Command="{Binding ToggleFoldCommand}">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Path Classes="chevron" Classes.folded="{Binding !IsOpen}" Data="M2,4.5 L6,8.5 L10,4.5" />
+                                            <TextBlock><Run Text="{Binding Title}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding CountText}" Foreground="{StaticResource MutedTextBrush}" /></TextBlock>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="1" Classes="subtle" Content="⋯" IsVisible="{Binding CanEdit}"
+                                            ToolTip.Tip="{x:Static s:Strings.More}" AutomationProperties.Name="{x:Static s:Strings.More}">
+                                        <Button.Flyout>
+                                            <MenuFlyout>
+                                                <MenuItem Header="{x:Static s:Strings.RenameEllipsis}" Command="{Binding RenameCommand}" />
+                                                <MenuItem Header="{x:Static s:Strings.DeleteEllipsis}" Command="{Binding DeleteCommand}" />
+                                            </MenuFlyout>
+                                        </Button.Flyout>
+                                    </Button>
+                                </Grid>
+                                <TextBlock Text="{x:Static s:Strings.EmptyCategoryHint}" Classes="muted small" Margin="28,0,0,16" IsVisible="{Binding ShowsEmptyHint}" />
+                                <ItemsControl ItemsSource="{Binding Items}" Margin="0,0,0,16" IsVisible="{Binding IsOpen}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <views:ColumnsPanel MinColumnWidth="{x:Static views:ProjectsView.MinColumnWidth}" MaxColumns="2" Spacing="12" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:ProjectCardViewModel">
+                                            <views:ProjectCardView />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using UnVault.App.Services;
 using UnVault.App.ViewModels;
 using UnVault.App.Views;
 using UnVault.Core.Install;
@@ -82,10 +83,11 @@ public sealed class ProjectsTests : IDisposable
             SourceBuilds(new CustomEngine("{6F1C2A3B-0D4E-4F5A-8B6C-7D8E9F0A1B2C}", sourceBuild, "5.4")));
         ProjectCardViewModel Card(string name) => projects.Items.Single(c => c.Name == name);
 
-        // What each is for, and whether it can open: only an engine that's missing gets a chip.
-        Assert.Equal(["UE 5.6  ·  Last opened: Today", "UE 5.3", "Source build 5.4", "No engine set"], projects.Items.Select(c => c.DetailsText));
+        // What each is for, and whether it can open: only an engine that's missing gets a chip. By name, not when opened.
+        Assert.Equal(["Hillside", "Loose", "Quarry", "Ridgeback"], projects.Items.Select(c => c.Name));
+        Assert.Equal(["UE 5.6  ·  Last opened: Today", "No engine set", "Source build 5.4", "UE 5.3"], projects.Items.Select(c => c.DetailsText));
         Assert.Equal([true, false, true, false], projects.Items.Select(c => c.CanOpen));
-        Assert.Equal([false, true, false, false], projects.Items.Select(c => c.IsEngineMissing));
+        Assert.Equal([false, false, false, true], projects.Items.Select(c => c.IsEngineMissing));
         Assert.Equal("UE 5.3 isn't installed on this PC.", Card("Ridgeback").OpenTip);
         Assert.False(Card("Ridgeback").OpenCommand.CanExecute(null));
 
@@ -157,17 +159,175 @@ public sealed class ProjectsTests : IDisposable
         Assert.Equal("3.0 MB", projects.Items[0].SizeText);
     }
 
-    /// <summary>Show in Folder is under ⋯, where more of what can be done with a project will go.</summary>
-    [AvaloniaFact]
-    public void Show_in_Folder_is_in_the_More_menu()
+    /// <summary>A projects page whose categories are kept in this test's own file.</summary>
+    private (MainViewModel Owner, ProjectsViewModel Projects) WithCategories(params UnrealProject[] found)
     {
-        var card = new ProjectCardView { DataContext = new ProjectCardViewModel(ScreenshotTests.SampleMainViewModel().Projects, Project("Hillside", "5.6")) };
-        var window = new Window { Content = card };
+        var owner = ScreenshotTests.SampleMainViewModel();
+        owner.Projects.CategoriesPath = Path.Combine(_dir, "project-categories.json");
+        owner.Projects.SetProjects(found, SourceBuilds());
+        return (owner, owner.Projects);
+    }
+
+    /// <summary>Names a new category in the dialog New Category opens, for the project whose menu it was chosen from.</summary>
+    private static void NewCategory(MainViewModel owner, ProjectCardViewModel card, string name)
+    {
+        card.NewCategoryCommand.Execute(null);
+        var dialog = Assert.IsType<CategoryNameViewModel>(owner.Dialog);
+        dialog.Name = name;
+        dialog.ConfirmCommand.Execute(null);
+        Assert.Null(owner.Dialog);
+    }
+
+    /// <summary>Each bundle shown: its heading (none without categories) and its projects.</summary>
+    private static List<(string Title, string Projects)> Shown(ProjectsViewModel projects) =>
+        [.. projects.Groups.Select(g => (g.HasHeading ? g.Title : "", string.Join(", ", g.Items.Select(c => c.Name))))];
+
+    [AvaloniaFact]
+    public void Without_categories_the_projects_are_one_list_by_name()
+    {
+        var (_, projects) = WithCategories(Project("Ridgeback", "5.7", DateTime.UtcNow), Project("hillside", "5.6"), Project("Lakeside", "5.5"));
+
+        Assert.Equal([("", "hillside, Lakeside, Ridgeback")], Shown(projects)); // no heading, and the case doesn't count
+    }
+
+    /// <summary>
+    /// Categories bundle projects, as Steam's collections: by name, each under its heading, a project in as many as it's put
+    /// in; then the projects in none, under Uncategorized. They're kept for next time.
+    /// </summary>
+    [AvaloniaFact]
+    public void Categories_bundle_projects_and_the_rest_come_after_them()
+    {
+        var (owner, projects) = WithCategories(Project("Hillside", "5.6"), Project("Lakeside", "5.5"), Project("OldTown", "4.26"), Project("Ridgeback", "5.7"));
+        ProjectCardViewModel Card(string name) => projects.Items.Single(c => c.Name == name);
+
+        NewCategory(owner, Card("Ridgeback"), "Plugins");
+        NewCategory(owner, Card("Hillside"), "Demos");
+        Card("Hillside").ToggleCategoryCommand.Execute(projects.Categories.Find("Plugins"));
+        Assert.Equal(
+            [("Demos", "Hillside"), ("Plugins", "Hillside, Ridgeback"), ("Uncategorized", "Lakeside, OldTown")],
+            Shown(projects));
+        Assert.Equal("4 Projects", projects.Summary); // each once
+        var saved = ProjectCategories.Load(projects.CategoriesPath);
+        Assert.Equal(["Plugins", "Demos"], saved.Categories.Select(c => c.Name));
+        Assert.Equal([Card("Hillside").Project.ProjectFile], saved.Find("demos")!.Projects);
+
+        // A name that's taken, in any case, can't be used again.
+        Card("Lakeside").NewCategoryCommand.Execute(null);
+        var taken = Assert.IsType<CategoryNameViewModel>(owner.Dialog);
+        taken.Name = " demos ";
+        Assert.Equal("There's already a category called demos.", taken.Error);
+        Assert.False(taken.ConfirmCommand.CanExecute(null));
+        taken.Name = "";
+        Assert.False(taken.ConfirmCommand.CanExecute(null));
+        taken.CancelCommand.Execute(null);
+
+        // Taken out of Demos, Hillside leaves it empty; the heading stays, saying how to fill it.
+        Card("Hillside").ToggleCategoryCommand.Execute(projects.Categories.Find("Demos"));
+        var demos = projects.Groups.Single(g => g.Title == "Demos");
+        Assert.Equal((0, true), (demos.Items.Count, demos.ShowsEmptyHint));
+
+        // Searching shows only the bundles with a match.
+        projects.SearchText = "ridge";
+        Assert.Equal([("Plugins", "Ridgeback")], Shown(projects));
+    }
+
+    [AvaloniaFact]
+    public void A_category_folds_and_can_be_renamed_or_deleted()
+    {
+        var (owner, projects) = WithCategories(Project("Hillside", "5.6"), Project("Ridgeback", "5.7"));
+        NewCategory(owner, projects.Items[0], "Demos");
+        ProjectGroupViewModel Group(string title) => projects.Groups.Single(g => g.Title == title);
+
+        // Folded (and the Uncategorized ones too), kept so; a search still shows what matches inside.
+        Group("Demos").ToggleFoldCommand.Execute(null);
+        Group("Uncategorized").ToggleFoldCommand.Execute(null);
+        Assert.Equal([false, false], projects.Groups.Select(g => g.IsOpen));
+        var saved = ProjectCategories.Load(projects.CategoriesPath);
+        Assert.Equal((true, true), (saved.Categories.Single().Folded, saved.UncategorizedFolded));
+        projects.SearchText = "hill";
+        Assert.True(Group("Demos").IsOpen);
+        projects.SearchText = "";
+
+        // Renamed: its own name in other letters is fine.
+        Group("Demos").RenameCommand.Execute(null);
+        var rename = Assert.IsType<CategoryNameViewModel>(owner.Dialog);
+        Assert.Equal("Demos", rename.Name);
+        rename.Name = "DEMOS";
+        Assert.Null(rename.Error);
+        rename.Name = "Showcase";
+        rename.ConfirmCommand.Execute(null);
+        Assert.Equal(["Showcase", "Uncategorized"], projects.Groups.Select(g => g.Title));
+
+        // Deleted, once confirmed: the bundle goes, its projects stay; with no categories left, no headings either.
+        Group("Showcase").DeleteCommand.Execute(null);
+        var confirm = Assert.IsType<ConfirmViewModel>(owner.Dialog);
+        Assert.Equal("Delete the Showcase category?", confirm.Title);
+        confirm.ConfirmCommand.Execute(null);
+        Assert.Equal([("", "Hillside, Ridgeback")], Shown(projects));
+        Assert.Empty(ProjectCategories.Load(projects.CategoriesPath).Categories);
+    }
+
+    /// <summary>
+    /// A project's ⋯: its categories (each ticked when it's in it, a click putting it in or out), a new one, then Show in
+    /// Folder; more of what can be done with a project will go there too.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_projects_More_menu_has_its_categories_and_Show_in_Folder()
+    {
+        var (owner, projects) = WithCategories(Project("Hillside", "5.6"));
+        NewCategory(owner, projects.Items[0], "My_Plugins");
+        NewCategory(owner, projects.Items[0], "Demos");
+        projects.Items[0].ToggleCategoryCommand.Execute(projects.Categories.Find("Demos"));
+        var view = new ProjectCardView { DataContext = projects.Items[0] };
+        var window = new Window { Content = view };
         window.Show();
-        var more = card.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "⋯");
+
+        var more = view.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == "⋯");
         var menu = Assert.IsType<MenuFlyout>(more.Flyout);
-        Assert.Equal(["Show in Folder"], menu.Items.OfType<MenuItem>().Select(i => i.Header as string));
+        view.OnMoreOpening(menu, EventArgs.Empty);
+        Assert.Equal(["Categories", "Show in Folder"], menu.Items.OfType<MenuItem>().Select(i => i.Header as string));
+        var categories = menu.Items.OfType<MenuItem>().First().Items;
+        Assert.Equal(
+            [("Demos", false), ("My__Plugins", true), ("New Category…", false)], // _ doubled, or it'd mark an access key and vanish
+            categories.OfType<MenuItem>().Select(i => (i.Header as string, i.IsChecked)));
+        Assert.Single(categories.OfType<Separator>());
         window.Close();
+    }
+
+    [AvaloniaFact]
+    public void Categories_page()
+    {
+        var viewModel = ScreenshotTests.SampleMainViewModel();
+        var projects = viewModel.Projects;
+        projects.CategoriesPath = Path.Combine(_dir, "project-categories.json");
+        DateTime now = DateTime.UtcNow;
+        var found = new[]
+        {
+            Project("Hillside", "5.6", now, Colors.SteelBlue),
+            Project("Ridgeback", "5.7", now.AddDays(-1), Colors.IndianRed),
+            Project("Lakeside", "5.5", now.AddDays(-3), Colors.CadetBlue),
+            Project("OldTown", "4.26", now.AddDays(-40)),
+            Project("Greybox", "5.7", null, Colors.DarkKhaki),
+        };
+        new ProjectCategories
+        {
+            Categories =
+            [
+                new ProjectCategory { Name = "Demos", Projects = [found[0].ProjectFile, found[2].ProjectFile] },
+                new ProjectCategory { Name = "Plugin Tests", Projects = [found[1].ProjectFile, found[4].ProjectFile] },
+                new ProjectCategory { Name = "Archive", Folded = true, Projects = [found[3].ProjectFile] },
+            ],
+        }.Save(projects.CategoriesPath);
+        projects.FindProjects = () => found;
+        projects.FindCustomEngines = () => SourceBuilds();
+        var window = ScreenshotTests.Show(viewModel);
+
+        viewModel.ShowProjectsCommand.Execute(null);
+        ScreenshotTests.WaitFor(() => projects.HasLoaded && projects.Items.All(c => c.Size is not null));
+        Assert.Equal(["Archive", "Demos", "Plugin Tests"], projects.Groups.Select(g => g.Title)); // all three in one: no Uncategorized
+        Assert.False(projects.Groups[0].IsOpen);
+        Dispatcher.UIThread.RunJobs();
+        ScreenshotTests.Save(window, "projects-categories.png");
     }
 
     [AvaloniaFact]

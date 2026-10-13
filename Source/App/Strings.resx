@@ -1435,4 +1435,53 @@
     <value>Couldn't open {0}: {1}</value>
     <comment>{0}: the project's name, {1}: what Windows said.</comment>
   </data>
+  <data name="Uncategorized" xml:space="preserve">
+    <value>Uncategorized</value>
+    <comment>The heading of the projects in none of the user's categories.</comment>
+  </data>
+  <data name="EmptyCategoryHint" xml:space="preserve">
+    <value>No projects here yet. Add one from its ⋯ menu.</value>
+  </data>
+  <data name="Categories" xml:space="preserve">
+    <value>Categories</value>
+    <comment>A project's menu: the user's categories, each ticked when the project is in it.</comment>
+  </data>
+  <data name="NewCategoryEllipsis" xml:space="preserve">
+    <value>New Category…</value>
+  </data>
+  <data name="NewCategoryTitle" xml:space="preserve">
+    <value>New Category</value>
+  </data>
+  <data name="RenameCategoryTitle" xml:space="preserve">
+    <value>Rename Category</value>
+  </data>
+  <data name="RenameEllipsis" xml:space="preserve">
+    <value>Rename…</value>
+  </data>
+  <data name="Rename" xml:space="preserve">
+    <value>Rename</value>
+  </data>
+  <data name="Create" xml:space="preserve">
+    <value>Create</value>
+  </data>
+  <data name="Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="DeleteEllipsis" xml:space="preserve">
+    <value>Delete…</value>
+  </data>
+  <data name="CategoryNamePlaceholder" xml:space="preserve">
+    <value>Category name</value>
+  </data>
+  <data name="CategoryNameTaken" xml:space="preserve">
+    <value>There's already a category called {0}.</value>
+    <comment>{0}: the name typed.</comment>
+  </data>
+  <data name="DeleteCategoryTitle" xml:space="preserve">
+    <value>Delete the {0} category?</value>
+    <comment>{0}: the category's name.</comment>
+  </data>
+  <data name="DeleteCategoryMessage" xml:space="preserve">
+    <value>Its projects aren't touched: they stay on disk, and in any other categories they're in.</value>
+  </data>
 </root>

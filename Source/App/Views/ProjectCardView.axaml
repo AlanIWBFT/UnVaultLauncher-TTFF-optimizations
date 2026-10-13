@@ -39,7 +39,10 @@
                         ToolTip.Tip="{Binding OpenTip}" ToolTip.ShowOnDisabled="True" />
                 <Button Content="⋯" ToolTip.Tip="{x:Static s:Strings.More}" AutomationProperties.Name="{x:Static s:Strings.More}">
                     <Button.Flyout>
-                        <MenuFlyout>
+                        <!-- Categories lists the user's, ticked where the project is; filled in as the menu opens (see OnMoreOpening) -->
+                        <MenuFlyout Opening="OnMoreOpening">
+                            <MenuItem Header="{x:Static s:Strings.Categories}" />
+                            <Separator />
                             <MenuItem Header="{x:Static s:Strings.ShowInFolder}" Command="{Binding ShowInFolderCommand}" />
                         </MenuFlyout>
                     </Button.Flyout>

@@ -10,8 +10,9 @@ using UnVault.Core.Projects;
 namespace UnVault.App.ViewModels;
 
 /// <summary>
-/// The Projects tab: the projects the editor has opened, and those in the project folders (Settings), newest first. Each
-/// opens in the engine it's for.
+/// The Projects tab: the projects the editor has opened, and those in the project folders (Settings), alphabetically. Each
+/// opens in the engine it's for. The user can bundle them in categories of their own, as Steam's collections: a project
+/// can be in several, and those in none come after them.
 /// </summary>
 public partial class ProjectsViewModel(MainViewModel owner) : ViewModelBase
 {
@@ -32,8 +33,19 @@ public partial class ProjectsViewModel(MainViewModel owner) : ViewModelBase
     /// <summary>Stops the counting of a load that's been replaced.</summary>
     private CancellationTokenSource? _counting;
 
-    /// <summary>The projects the search leaves.</summary>
+    /// <summary>The projects the search leaves, each once.</summary>
     public ObservableCollection<ProjectCardViewModel> Items { get; } = [];
+
+    /// <summary>What's shown: each category, then the projects in none; while there are no categories, just the projects.</summary>
+    public ObservableCollection<ProjectGroupViewModel> Groups { get; } = [];
+
+    private ProjectCategories? _categories;
+
+    /// <summary>The user's categories, read on first use.</summary>
+    internal ProjectCategories Categories => _categories ??= ProjectCategories.Load(CategoriesPath);
+
+    /// <summary>Where the categories are kept; tests keep theirs in a file of their own.</summary>
+    internal string? CategoriesPath { get; set; }
 
     [ObservableProperty] public partial string SearchText { get; set; } = "";
     [ObservableProperty] public partial bool IsLoading { get; set; }
@@ -82,7 +94,8 @@ public partial class ProjectsViewModel(MainViewModel owner) : ViewModelBase
     internal void SetProjects(IReadOnlyList<UnrealProject> projects, IReadOnlyDictionary<string, CustomEngine> customEngines)
     {
         _customEngines = customEngines;
-        _all = [.. projects.Select(p => new ProjectCardViewModel(this, p) { Size = _sizes.TryGetValue(p.ProjectFile, out long size) ? size : null })];
+        _all = [.. projects.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(p => new ProjectCardViewModel(this, p) { Size = _sizes.TryGetValue(p.ProjectFile, out long size) ? size : null })];
         HasLoaded = true;
         EnginesChanged();
         Filter();
@@ -115,10 +128,100 @@ public partial class ProjectsViewModel(MainViewModel owner) : ViewModelBase
         Items.Clear();
         foreach (var card in _all.Where(c => c.Matches(search)))
             Items.Add(card);
+        Groups.Clear();
+        foreach (var group in GroupsOf([.. Items], searching: search.Length > 0))
+            Groups.Add(group);
         Summary = Items.Count == _all.Count
             ? Localized.Plural(nameof(Strings.ProjectsSummary_Other), _all.Count)
             : Localized.Plural(nameof(Strings.ProjectsFiltered_Other), _all.Count, Items.Count);
         UpdateEmpty();
+    }
+
+    /// <summary>
+    /// Each category, alphabetically, then the projects in none (when there are any). While searching, a category without a
+    /// match isn't shown; otherwise an empty one is, so it can be filled.
+    /// </summary>
+    private IEnumerable<ProjectGroupViewModel> GroupsOf(IReadOnlyList<ProjectCardViewModel> cards, bool searching)
+    {
+        var categories = Categories.Categories;
+        if (categories.Count == 0)
+        {
+            yield return new ProjectGroupViewModel(this, null, cards, hasHeading: false, searching);
+            yield break;
+        }
+        foreach (var category in categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var items = cards.Where(card => card.IsIn(category)).ToList();
+            if (items.Count > 0 || !searching)
+                yield return new ProjectGroupViewModel(this, category, items, hasHeading: true, searching);
+        }
+        var uncategorized = cards.Where(card => !categories.Any(card.IsIn)).ToList();
+        if (uncategorized.Count > 0)
+            yield return new ProjectGroupViewModel(this, null, uncategorized, hasHeading: true, searching);
+    }
+
+    /// <summary>The categories by name, as the menus list them.</summary>
+    internal IReadOnlyList<ProjectCategory> SortedCategories =>
+        [.. Categories.Categories.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase)];
+
+    /// <summary>Puts the project in the category, or takes it out.</summary>
+    internal void ToggleCategory(ProjectCategory category, ProjectCardViewModel card)
+    {
+        string file = card.Project.ProjectFile;
+        if (!category.Projects.Remove(category.Projects.FirstOrDefault(p => string.Equals(p, file, StringComparison.OrdinalIgnoreCase)) ?? ""))
+            category.Projects.Add(file);
+        CategoriesChanged();
+    }
+
+    /// <summary>Asks for a new category's name; it's made with <paramref name="card"/>'s project in it.</summary>
+    internal void AskNewCategory(ProjectCardViewModel card) =>
+        Owner.Dialog = new CategoryNameViewModel(Owner, Strings.NewCategoryTitle, Strings.Create, "",
+            isTaken: name => Categories.Find(name) is not null,
+            onConfirm: name =>
+            {
+                Categories.Categories.Add(new ProjectCategory { Name = name, Projects = [card.Project.ProjectFile] });
+                CategoriesChanged();
+            });
+
+    internal void AskRename(ProjectGroupViewModel group)
+    {
+        if (group.Category is not { } category)
+            return;
+        Owner.Dialog = new CategoryNameViewModel(Owner, Strings.RenameCategoryTitle, Strings.Rename, category.Name,
+            isTaken: name => Categories.Find(name) is { } other && other != category,
+            onConfirm: name =>
+            {
+                category.Name = name;
+                CategoriesChanged();
+            });
+    }
+
+    /// <summary>Asks first: the bundle goes, though its projects stay (on disk, and in other categories).</summary>
+    internal void AskDelete(ProjectGroupViewModel group)
+    {
+        if (group.Category is not { } category)
+            return;
+        Owner.Dialog = new ConfirmViewModel(Owner, Localized.Format(Strings.DeleteCategoryTitle, category.Name), Strings.DeleteCategoryMessage,
+            Strings.Delete, () =>
+            {
+                Categories.Categories.Remove(category);
+                CategoriesChanged();
+            });
+    }
+
+    internal void ToggleFold(ProjectGroupViewModel group)
+    {
+        if (group.Category is { } category)
+            category.Folded = !category.Folded;
+        else
+            Categories.UncategorizedFolded = !Categories.UncategorizedFolded;
+        CategoriesChanged();
+    }
+
+    private void CategoriesChanged()
+    {
+        Categories.Save(CategoriesPath);
+        Filter();
     }
 
     private void UpdateEmpty()
