@@ -596,7 +596,7 @@
 
   <!-- About -->
   <data name="AboutDescription" xml:space="preserve">
-    <value>A streamlined and lightweight launcher for installing and managing Unreal Engine and Fab assets and plugins.</value>
+    <value>A streamlined and lightweight launcher for installing and managing Unreal Engine, your projects, and Fab assets and plugins.</value>
   </data>
   <data name="CheckAgain" xml:space="preserve">
     <value>Check Again</value>

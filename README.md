@@ -1,19 +1,22 @@
 # UnVault Launcher
 
-A streamlined and lightweight launcher for installing and managing Unreal Engine and Fab assets and plugins.
+A streamlined and lightweight launcher for installing and managing Unreal Engine, your projects, and Fab assets and plugins.
 
 - **Engines**: install, modify, verify and repair. Untick platforms, debug symbols or templates to save disk space.
-- **Library**: install plugins, add asset packs to projects and create projects, several at once.
+- **Projects**: open and sort them into your own categories.
+- **Library**: install plugins into engines or projects (with optional recompilation), add asset packs to projects and create projects.
 - **Downloads**: pause, resume and retry, with a history.
 - **Works alongside the Epic Games Launcher**: uses its engines, plugins, Vault Cache and project folders.
 
 ## Screenshots
 
-![Engines](https://dmkarpukhin.com/assets/img/unvault_a_0.6.0.jpg)
+![Engines](https://dmkarpukhin.com/assets/img/unvault_a_0.7.0.jpg)
 
-![Library](https://dmkarpukhin.com/assets/img/unvault_b_0.6.0.jpg)
+![Projects](https://dmkarpukhin.com/assets/img/unvault_b_0.7.0.jpg)
 
-![Downloads](https://dmkarpukhin.com/assets/img/unvault_c_0.6.0.jpg)
+![Library](https://dmkarpukhin.com/assets/img/unvault_c_0.7.0.jpg)
+
+![Downloads](https://dmkarpukhin.com/assets/img/unvault_d_0.7.0.jpg)
 
 ## Download
 
@@ -38,6 +41,7 @@ There's also a command-line tool for engines, for scripting and diagnostics. It 
 - Your session is stored encrypted for your Windows account and sent only to Epic.
 - Downloads use HTTPS and are checked against the hashes in Epic's manifests.
 - Connects only to Epic, Fab and GitHub (the update check, which Settings can turn off).
+- Keeps its own data (sign-in, settings, caches) in `%LOCALAPPDATA%\UnVaultLauncher`.
 - No telemetry, no background service, no admin rights. Only an engine's prerequisites installer may ask for them.
 - Releases aren't code-signed, so Windows may warn about an unknown publisher.
 
