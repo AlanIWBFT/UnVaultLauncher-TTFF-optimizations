@@ -177,7 +177,7 @@ public partial class SettingsViewModel : ViewModelBase
             return;
         }
         Error = null;
-        _owner.OpenURL(folder);
+        _owner.OpenFolder(folder);
     }
 
     [RelayCommand]

@@ -215,7 +215,7 @@ public partial class FabActionViewModel : ViewModelBase, IShowsBusy
     public const string VisualStudioGuideURL = "https://dev.epicgames.com/documentation/unreal-engine/setting-up-visual-studio-development-environment-for-cplusplus-projects-in-unreal-engine";
 
     [RelayCommand]
-    private void OpenVisualStudioGuide() => _library.Owner.OpenURL(VisualStudioGuideURL);
+    private void OpenVisualStudioGuide() => _library.Owner.OpenWebPage(VisualStudioGuideURL);
 
     public ObservableCollection<FabEngineOption> RecompileEngines { get; } = [];
 

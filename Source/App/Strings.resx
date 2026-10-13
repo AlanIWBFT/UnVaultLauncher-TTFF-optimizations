@@ -1484,4 +1484,8 @@
   <data name="DeleteCategoryMessage" xml:space="preserve">
     <value>Its projects aren't touched: they stay on disk, and in any other categories they're in.</value>
   </data>
+  <data name="CouldNotOpen" xml:space="preserve">
+    <value>Couldn't open {0}.</value>
+    <comment>{0}: a web link that isn't a page of Fab, Epic or GitHub, or that no browser could open.</comment>
+  </data>
 </root>

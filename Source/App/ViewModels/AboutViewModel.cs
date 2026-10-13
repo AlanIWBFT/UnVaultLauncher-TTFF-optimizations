@@ -22,17 +22,17 @@ public partial class AboutViewModel(MainViewModel owner) : ViewModelBase
     private Task CheckAgainAsync() => owner.CheckForUpdatesAsync();
 
     [RelayCommand]
-    private void Download() => owner.OpenURL(owner.AppUpdate?.PageURL ?? ReleasesURL);
+    private void Download() => owner.OpenWebPage(owner.AppUpdate?.PageURL ?? ReleasesURL);
 
     [RelayCommand]
-    private void OpenLink(string url) => owner.OpenURL(url);
+    private void OpenLink(string url) => owner.OpenWebPage(url);
 
     /// <summary>Sign-in, settings, caches and crash.log: what's useful when reporting a problem.</summary>
     [RelayCommand]
     private void OpenDataFolder()
     {
         Directory.CreateDirectory(AppPaths.DataDirectory);
-        owner.OpenURL(AppPaths.DataDirectory);
+        owner.OpenFolder(AppPaths.DataDirectory);
     }
 
     [RelayCommand]

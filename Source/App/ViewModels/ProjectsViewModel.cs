@@ -312,9 +312,5 @@ public partial class ProjectsViewModel(MainViewModel owner) : ViewModelBase
         }
     }
 
-    internal void ShowInFolder(ProjectCardViewModel card)
-    {
-        if (System.IO.Directory.Exists(card.Directory))
-            Owner.OpenURL(card.Directory);
-    }
+    internal void ShowInFolder(ProjectCardViewModel card) => Owner.OpenFolder(card.Directory);
 }

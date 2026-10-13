@@ -137,7 +137,7 @@ public partial class InstalledPluginsViewModel(MainViewModel owner, LocalEngine 
         };
     }
 
-    internal void ShowInFolder(string folder) => owner.OpenURL(folder);
+    internal void ShowInFolder(string folder) => owner.OpenFolder(folder);
 
     [RelayCommand]
     private void Close() => owner.Close(this);

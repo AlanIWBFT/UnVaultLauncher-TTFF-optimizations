@@ -729,12 +729,15 @@ public partial class MainViewModel : ViewModelBase
             await Fab.LoadAsync(includeLibrary: false);
     }
 
-    /// <summary>Opens a web page or a folder with the system default handler.</summary>
-    internal void OpenURL(string? target)
+    /// <summary>Opens a page of Fab, Epic or GitHub in the browser; anything else is refused (see <see cref="SafeOpen"/>).</summary>
+    internal void OpenWebPage(string? url)
     {
-        if (!string.IsNullOrEmpty(target))
-            Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+        if (!string.IsNullOrEmpty(url) && !SafeOpen.WebPage(url))
+            Notice = Localized.Format(Strings.CouldNotOpen, url);
     }
+
+    /// <summary>Shows a folder, when it's there; never opens a file.</summary>
+    internal void OpenFolder(string? folder) => SafeOpen.Folder(folder);
 
     /// <summary>An engine's editor: UnrealEditor.exe, or UE4Editor.exe in UE 4; null when neither is there.</summary>
     internal static string? EditorIn(string engineDirectory) =>
@@ -754,11 +757,7 @@ public partial class MainViewModel : ViewModelBase
         Process.Start(new ProcessStartInfo(editor) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(editor) });
     }
 
-    internal void OpenFolder(EngineCardViewModel engine)
-    {
-        if (engine.Local is not null && Directory.Exists(engine.Local.Directory))
-            Process.Start(new ProcessStartInfo(engine.Local.Directory) { UseShellExecute = true });
-    }
+    internal void OpenFolder(EngineCardViewModel engine) => OpenFolder(engine.Local?.Directory);
 
     internal async Task OpenInstalledPluginsAsync(EngineCardViewModel engine)
     {

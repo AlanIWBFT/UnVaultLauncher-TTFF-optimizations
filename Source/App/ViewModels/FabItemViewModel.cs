@@ -1,6 +1,7 @@
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UnVault.App.Services;
 using UnVault.Core.Epic;
 using UnVault.Core.Fab;
 using UnVault.Core.Install;
@@ -123,7 +124,8 @@ public partial class FabItemViewModel : ViewModelBase
     }
 
     public bool IsInLibrary => Library is not null;
-    public bool HasFabPage => !string.IsNullOrEmpty(Library?.URL);
+    /// <summary>Fab gave a link to the item's page, and it is one: https on Fab's site (see <see cref="SafeOpen"/>).</summary>
+    public bool HasFabPage => SafeOpen.IsWebPage(Library?.URL);
 
     /// <summary>What the tile's main button does for this kind of item.</summary>
     public string ActionText => Kind switch
@@ -208,7 +210,7 @@ public partial class FabItemViewModel : ViewModelBase
     private void Download() => _owner.OpenDownload(this);
 
     [RelayCommand]
-    private void OpenFabPage() => _owner.Owner.OpenURL(Library?.URL);
+    private void OpenFabPage() => _owner.Owner.OpenWebPage(Library?.URL);
 
     public bool HasFolder => IsDownloaded || IsInstalled;
 
@@ -219,7 +221,7 @@ public partial class FabItemViewModel : ViewModelBase
         string? folder = Versions.FirstOrDefault(v => v.IsDownloaded)?.Vault?.Directory
             ?? Installs.FirstOrDefault(i => Directory.Exists(i.Folder))?.Folder;
         if (folder is not null)
-            _owner.Owner.OpenURL(folder);
+            _owner.Owner.OpenFolder(folder);
     }
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
