@@ -1367,4 +1367,72 @@
     <value>Something went wrong: {0} Details were saved to {1}.</value>
     <comment>{0}: the error, possibly in English, {1}: the log file.</comment>
   </data>
+  <data name="Projects" xml:space="preserve">
+    <value>Projects</value>
+  </data>
+  <data name="ProjectsSummary_One" xml:space="preserve">
+    <value>{0:N0} Project</value>
+    <comment>{0}: projects found.</comment>
+  </data>
+  <data name="ProjectsSummary_Other" xml:space="preserve">
+    <value>{0:N0} Projects</value>
+  </data>
+  <data name="ProjectsFiltered_One" xml:space="preserve">
+    <value>{1:N0} of {0:N0} Project</value>
+    <comment>{0}: projects found, {1}: of them the search leaves.</comment>
+  </data>
+  <data name="ProjectsFiltered_Other" xml:space="preserve">
+    <value>{1:N0} of {0:N0} Projects</value>
+  </data>
+  <data name="LookingForProjects" xml:space="preserve">
+    <value>Looking for projects…</value>
+  </data>
+  <data name="NoProjects" xml:space="preserve">
+    <value>No projects found</value>
+  </data>
+  <data name="NoProjectsHint" xml:space="preserve">
+    <value>Projects you've opened in the editor show here, and so do those in your project folders (Settings).</value>
+  </data>
+  <data name="NoProjectMatches" xml:space="preserve">
+    <value>No project matches your search.</value>
+  </data>
+  <data name="Open" xml:space="preserve">
+    <value>Open</value>
+    <comment>Opens a project in its engine's editor.</comment>
+  </data>
+  <data name="ProjectEngine" xml:space="preserve">
+    <value>UE {0}</value>
+    <comment>{0}: the engine version a project is for, e.g. 5.6.</comment>
+  </data>
+  <data name="ProjectSourceBuild" xml:space="preserve">
+    <value>Source build</value>
+    <comment>A project for an engine built from source, whose version can't be read.</comment>
+  </data>
+  <data name="ProjectSourceBuildVersion" xml:space="preserve">
+    <value>Source build {0}</value>
+    <comment>{0}: the source-built engine's version, e.g. 5.4.</comment>
+  </data>
+  <data name="ProjectNoEngine" xml:space="preserve">
+    <value>No engine set</value>
+    <comment>The project's file doesn't name an engine.</comment>
+  </data>
+  <data name="ProjectLastOpened" xml:space="preserve">
+    <value>Last opened: {0}</value>
+    <comment>{0}: Today, Yesterday, a weekday or a date.</comment>
+  </data>
+  <data name="OpenProjectIn" xml:space="preserve">
+    <value>Open in {0}</value>
+    <comment>{0}: the engine, e.g. UE 5.6.</comment>
+  </data>
+  <data name="ProjectEngineMissing" xml:space="preserve">
+    <value>{0} isn't installed on this PC.</value>
+    <comment>{0}: the engine, e.g. UE 5.3, or Source build.</comment>
+  </data>
+  <data name="ProjectNamesNoEngine" xml:space="preserve">
+    <value>Its project file doesn't say which engine it's for. Open it from the engine's editor instead.</value>
+  </data>
+  <data name="CouldNotOpenProject" xml:space="preserve">
+    <value>Couldn't open {0}: {1}</value>
+    <comment>{0}: the project's name, {1}: what Windows said.</comment>
+  </data>
 </root>

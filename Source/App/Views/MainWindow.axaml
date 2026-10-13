@@ -99,6 +99,11 @@
                                 <views:TabMark NeedsAttention="{Binding HasEngineUpdates}" />
                             </Panel>
                         </Button>
+                        <Button Classes="tab" Classes.active="{Binding IsProjectsTab}" Command="{Binding ShowProjectsCommand}">
+                            <Panel>
+                                <TextBlock Text="{x:Static s:Strings.Projects}" />
+                            </Panel>
+                        </Button>
                         <Button Classes="tab" Classes.active="{Binding IsFabTab}" Command="{Binding ShowFabCommand}" ToolTip.Tip="{Binding LibraryUpdatesText}">
                             <Panel>
                                 <TextBlock Text="{x:Static s:Strings.Library}" />
@@ -134,6 +139,16 @@
                         <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="120" />
                         <TextBlock Text="{Binding Fab.LoadingText}" Classes="muted" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                     </DockPanel>
+                    <DockPanel Grid.Column="1" Margin="20,0,12,0" VerticalAlignment="Center">
+                        <DockPanel.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="IsProjectsTab" />
+                                <Binding Path="Projects.IsLoading" />
+                            </MultiBinding>
+                        </DockPanel.IsVisible>
+                        <ProgressBar DockPanel.Dock="Left" IsIndeterminate="True" Width="120" />
+                        <TextBlock Text="{x:Static s:Strings.LookingForProjects}" Classes="muted" Margin="12,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
 
                     <Panel Grid.Column="2" VerticalAlignment="Center">
                         <Button Classes="accent" Command="{Binding InstallEngineCommand}" Padding="10" IsVisible="{Binding IsEnginesTab}"
@@ -142,6 +157,7 @@
                             <PathIcon Width="14" Height="14" Data="M6.7,2 H9.3 V6.7 H14 V9.3 H9.3 V14 H6.7 V9.3 H2 V6.7 H6.7 Z" />
                         </Button>
                         <TextBlock Text="{Binding Fab.Summary}" Classes="muted" IsVisible="{Binding IsFabTab}" />
+                        <TextBlock Text="{Binding Projects.Summary}" Classes="muted" IsVisible="{Binding IsProjectsTab}" />
                     </Panel>
                 </Grid>
             </Border>
@@ -187,6 +203,9 @@
 
                 </StackPanel>
             </ScrollViewer>
+
+            <!-- Projects -->
+            <views:ProjectsView Grid.Row="3" DataContext="{Binding Projects}" IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsProjectsTab}" />
 
             <!-- Fab -->
             <views:FabLibraryView Grid.Row="3" DataContext="{Binding Fab}" IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsFabTab}" />

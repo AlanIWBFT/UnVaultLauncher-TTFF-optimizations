@@ -14,7 +14,7 @@ namespace UnVault.App.ViewModels;
 
 public enum UpdateCheckState { NotChecked, Checking, UpToDate, Available, Failed }
 
-public enum AppTab { Engines, Library, Downloads }
+public enum AppTab { Engines, Projects, Library, Downloads }
 
 public partial class MainViewModel : ViewModelBase
 {
@@ -27,6 +27,7 @@ public partial class MainViewModel : ViewModelBase
         Services = services;
         _historyPath = historyPath ?? OperationHistory.FilePath;
         Fab = new FabLibraryViewModel(this);
+        Projects = new ProjectsViewModel(this);
         Fab.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(FabLibraryViewModel.UpdateCount))
@@ -65,6 +66,8 @@ public partial class MainViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(CloseToTray));
         PruneManifestCache(); // the limit may be lower now
+        if (Projects.HasLoaded)
+            _ = Projects.LoadAsync(); // the project folders may have changed
     }
 
     /// <summary>Applies the limit from Settings and makes room, in the background: it's only a cache.</summary>
@@ -77,6 +80,8 @@ public partial class MainViewModel : ViewModelBase
 
     public FabLibraryViewModel Fab { get; }
 
+    public ProjectsViewModel Projects { get; }
+
     /// <summary>Underlines the Library tab in yellow.</summary>
     public bool HasLibraryUpdates => Fab.UpdateCount > 0;
 
@@ -87,10 +92,12 @@ public partial class MainViewModel : ViewModelBase
     public IReadOnlyList<LocalEngine> LocalEngines => _local;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEnginesTab), nameof(IsFabTab), nameof(IsDownloadsTab))]
+    [NotifyPropertyChangedFor(nameof(IsEnginesTab), nameof(IsProjectsTab), nameof(IsFabTab), nameof(IsDownloadsTab))]
     public partial AppTab Tab { get; set; }
 
     public bool IsEnginesTab => Tab == AppTab.Engines;
+
+    public bool IsProjectsTab => Tab == AppTab.Projects;
 
     /// <summary>The Library tab; turning it off shows Engines.</summary>
     public bool IsFabTab
@@ -311,10 +318,21 @@ public partial class MainViewModel : ViewModelBase
         await RefreshCoreAsync(includeOwned: !IsFabTab);
         if (IsFabTab)
             await Fab.LoadAsync(includeLibrary: true);
+        else if (IsProjectsTab)
+            await Projects.LoadAsync();
     }
 
     [RelayCommand]
     private void ShowEngines() => Tab = AppTab.Engines;
+
+    /// <summary>The first visit finds the projects; later ones show them as they were (the refresh button looks again).</summary>
+    [RelayCommand]
+    private void ShowProjects()
+    {
+        Tab = AppTab.Projects;
+        if (!Projects.HasLoaded && !Projects.IsLoading)
+            _ = Projects.LoadAsync();
+    }
 
     [RelayCommand]
     private void ShowDownloads()
@@ -428,6 +446,7 @@ public partial class MainViewModel : ViewModelBase
         HasNoEngines = Engines.Count == 0;
         OnPropertyChanged(nameof(HasEngineUpdates));
         OnPropertyChanged(nameof(EngineUpdatesText));
+        Projects.EnginesChanged();
     }
 
     /// <summary>An operation is working on the engine, so nothing else may start on it.</summary>
@@ -716,14 +735,17 @@ public partial class MainViewModel : ViewModelBase
             Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
     }
 
+    /// <summary>An engine's editor: UnrealEditor.exe, or UE4Editor.exe in UE 4; null when neither is there.</summary>
+    internal static string? EditorIn(string engineDirectory) =>
+        new[] { @"Engine\Binaries\Win64\UnrealEditor.exe", @"Engine\Binaries\Win64\UE4Editor.exe" }
+            .Select(relative => Path.Combine(engineDirectory, relative))
+            .FirstOrDefault(File.Exists);
+
     internal void Launch(EngineCardViewModel engine)
     {
         if (engine.Local is null)
             return;
-        string? editor = new[] { "Engine/Binaries/Win64/UnrealEditor.exe", "Engine/Binaries/Win64/UE4Editor.exe" }
-            .Select(relative => Path.Combine(engine.Local.Directory, relative))
-            .FirstOrDefault(File.Exists);
-        if (editor is null)
+        if (EditorIn(engine.Local.Directory) is not { } editor)
         {
             Notice = Localized.Format(Strings.NoEditorFound, engine.Local.Directory);
             return;

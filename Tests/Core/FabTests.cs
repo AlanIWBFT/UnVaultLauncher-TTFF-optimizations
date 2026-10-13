@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using UnVault.Core.Epic;
 using UnVault.Core.Fab;
@@ -648,6 +649,41 @@ public sealed class FabTests : IDisposable
         Assert.Equal("UE_5.7", projects[0].EngineAppName);
         Assert.Equal(new DateTime(2026, 9, 27, 23, 18, 27), projects[0].LastOpened!.Value.ToUniversalTime());
         Assert.Equal("UE_5.5", projects[1].EngineAppName);
+    }
+
+    /// <summary>
+    /// A project's size is all its folder holds, hidden files too; a cache linked in by a junction is somewhere else's and
+    /// isn't counted.
+    /// </summary>
+    [Fact]
+    public void A_projects_size_counts_its_files_but_not_what_a_junction_links_in()
+    {
+        string project = Path.GetDirectoryName(WriteProject(Path.Combine(_dir, "Hillside", "Hillside.uproject"), "5.6"))!;
+        long uproject = new FileInfo(Path.Combine(project, "Hillside.uproject")).Length;
+        Directory.CreateDirectory(Path.Combine(project, "Content", "Maps"));
+        File.WriteAllBytes(Path.Combine(project, "Content", "Maps", "Hillside.umap"), new byte[3000]);
+        string hidden = Path.Combine(project, "Saved", "Config.ini");
+        Directory.CreateDirectory(Path.GetDirectoryName(hidden)!);
+        File.WriteAllBytes(hidden, new byte[200]);
+        File.SetAttributes(hidden, FileAttributes.Hidden);
+
+        string shared = Path.Combine(_dir, "SharedDDC");
+        Directory.CreateDirectory(shared);
+        File.WriteAllBytes(Path.Combine(shared, "Cache.ddp"), new byte[50_000]);
+        string junction = Path.Combine(project, "DerivedDataCache");
+        using (var link = Process.Start(new ProcessStartInfo("cmd.exe") { ArgumentList = { "/d", "/c", "mklink", "/J", junction, shared }, CreateNoWindow = true, UseShellExecute = false })!)
+            link.WaitForExit();
+        try
+        {
+            Assert.True(File.Exists(Path.Combine(junction, "Cache.ddp"))); // linked in
+
+            Assert.Equal(uproject + 3000 + 200, ProjectLocator.SizeOf(project));
+            Assert.Throws<OperationCanceledException>(() => ProjectLocator.SizeOf(project, new CancellationToken(canceled: true)));
+        }
+        finally
+        {
+            Directory.Delete(junction); // the link alone: deleting the folder it's in can't take it away
+        }
     }
 
     [Fact]

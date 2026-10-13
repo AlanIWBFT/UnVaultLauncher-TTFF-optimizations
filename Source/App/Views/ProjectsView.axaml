@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:UnVault.App"
+             xmlns:vm="using:UnVault.App.ViewModels"
+             xmlns:views="using:UnVault.App.Views"
+             x:Class="UnVault.App.Views.ProjectsView"
+             x:DataType="vm:ProjectsViewModel">
+
+    <!-- The search box, then the projects: two columns, one when the window is narrow. Loading and the count are on the tab row. -->
+    <Grid RowDefinitions="Auto,*">
+
+        <TextBox Margin="24,20,24,0" MaxWidth="{StaticResource PageMaxWidth}" Text="{Binding SearchText}" PlaceholderText="{x:Static s:Strings.SearchProjects}">
+            <TextBox.KeyBindings>
+                <KeyBinding Gesture="Escape" Command="{Binding ClearSearchCommand}" />
+            </TextBox.KeyBindings>
+            <TextBox.InnerRightContent>
+                <Button Classes="clear" Command="{Binding ClearSearchCommand}" ToolTip.Tip="{x:Static s:Strings.ClearSearchTip}" AutomationProperties.Name="{x:Static s:Strings.ClearSearch}"
+                        IsVisible="{Binding SearchText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <Path Data="M0,0 L9,9 M9,0 L0,9" Stroke="{StaticResource MutedTextBrush}" StrokeThickness="1.6" StrokeLineCap="Round" />
+                </Button>
+            </TextBox.InnerRightContent>
+        </TextBox>
+
+        <ScrollViewer Grid.Row="1" Margin="0,12,0,0">
+            <Panel Margin="24,0,24,24" MaxWidth="{StaticResource PageMaxWidth}">
+                <StackPanel IsVisible="{Binding IsEmpty}" Margin="0,32" Spacing="6" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding EmptyText}" FontSize="16" HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding EmptyHint}" Classes="muted" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                               IsVisible="{Binding EmptyHint, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding Items}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <views:ColumnsPanel MinColumnWidth="{x:Static views:ProjectsView.MinColumnWidth}" MaxColumns="2" Spacing="12" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:ProjectCardViewModel">
+                            <views:ProjectCardView />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Panel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

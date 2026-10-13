@@ -9,6 +9,9 @@ public sealed record UnrealProject(string Name, string ProjectFile, string Engin
 {
     public string Directory => Path.GetDirectoryName(ProjectFile)!;
 
+    /// <summary>The editor's own picture of the project, Saved\AutoScreenshot.png; there may be none.</summary>
+    public string ScreenshotFile => Path.Combine(Directory, "Saved", "AutoScreenshot.png");
+
     /// <summary>"5.7" → "UE_5.7". Null for source builds, which associate by GUID.</summary>
     public string? EngineAppName => Version.TryParse(EngineAssociation, out _) ? "UE_" + EngineAssociation : null;
 }
@@ -84,6 +87,23 @@ public static partial class ProjectLocator
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// All a project's folder holds, as Explorer counts a folder's size: each file's length, hidden ones too. Only the
+    /// folders' listings are read, not the files, but a big project has many, so it's counted in the background. A junction
+    /// (a shared cache linked in) isn't followed: what's behind it isn't the project's. Folders it may not read are left out.
+    /// </summary>
+    public static long SizeOf(string projectDirectory, CancellationToken cancellationToken = default)
+    {
+        var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = true };
+        long size = 0;
+        foreach (var file in new DirectoryInfo(projectDirectory).EnumerateFiles("*", options))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            size += file.Length;
+        }
+        return size;
     }
 
     private static IEnumerable<string> SafeEnumerate(Func<IEnumerable<string>> enumerate)

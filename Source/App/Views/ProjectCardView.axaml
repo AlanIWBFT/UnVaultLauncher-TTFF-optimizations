@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:UnVault.App"
+             xmlns:vm="using:UnVault.App.ViewModels"
+             x:Class="UnVault.App.Views.ProjectCardView"
+             x:DataType="vm:ProjectCardViewModel">
+
+    <!-- Laid out like an engine card: the picture filling the left side, what it is beside it, the buttons at the right end -->
+    <Border Classes="card" Padding="0">
+        <Grid ColumnDefinitions="Auto,*,Auto">
+
+            <!-- The editor's picture of the project, square as it takes them; its initial until that loads, or when there's none -->
+            <Border Width="88" MinHeight="88" CornerRadius="9,0,0,9" ClipToBounds="True" Background="{StaticResource PictureBackgroundBrush}">
+                <Panel>
+                    <TextBlock Text="{Binding Initial}" FontSize="32" FontWeight="SemiBold" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Image Source="{Binding Screenshot}" Stretch="UniformToFill" />
+                </Panel>
+            </Border>
+
+            <!-- Its name; where it is and how big (once counted), as engine cards start; the engine it's for, a chip only when that's not installed -->
+            <StackPanel Grid.Column="1" Margin="16,12" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                <!-- Left-aligned, so the size follows the folder; a long folder is cut short instead of the size -->
+                <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left">
+                    <TextBlock Text="{Binding Directory}" Classes="muted small" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Directory}" />
+                    <TextBlock Grid.Column="1" Text="{Binding SizeText, StringFormat='  ·  {0}'}" Classes="muted small"
+                               IsVisible="{Binding SizeText, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </Grid>
+                <WrapPanel ItemSpacing="8" LineSpacing="4">
+                    <TextBlock Text="{Binding DetailsText}" Classes="muted small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DetailsText}" />
+                    <Border Classes="chip compact warning" IsVisible="{Binding IsEngineMissing}" ToolTip.Tip="{Binding OpenTip}">
+                        <TextBlock Text="{x:Static s:Strings.NotInstalled}" />
+                    </Border>
+                </WrapPanel>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="0,0,16,0" VerticalAlignment="Center">
+                <Button Content="{x:Static s:Strings.Open}" Classes="accent" Command="{Binding OpenCommand}"
+                        ToolTip.Tip="{Binding OpenTip}" ToolTip.ShowOnDisabled="True" />
+                <Button Content="⋯" ToolTip.Tip="{x:Static s:Strings.More}" AutomationProperties.Name="{x:Static s:Strings.More}">
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Header="{x:Static s:Strings.ShowInFolder}" Command="{Binding ShowInFolderCommand}" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

@@ -335,7 +335,7 @@ public sealed class ThumbnailCache
     }
 
     /// <summary>Whether the picture's header gives a size a preview can have; reads only the header.</summary>
-    private static bool IsPreviewSized(string file)
+    internal static bool IsPreviewSized(string file)
     {
         using var codec = SKCodec.Create(file);
         return codec is { Info: { Width: <= MaxSide, Height: <= MaxSide } };

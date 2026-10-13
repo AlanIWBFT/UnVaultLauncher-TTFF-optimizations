@@ -386,10 +386,11 @@ public class ScreenshotTests
 
         // The tabs' dots: yellow on Engines for an engine's update, and on Downloads for the failed operation, which comes
         // before the engine installing there: it waits for the user. No tab moves or grows for them.
-        var marks = tabs.Select(t => t.GetVisualDescendants().OfType<TabMark>().Single()).ToList();
+        // Projects has no dot: nothing there waits for the user or runs.
+        var marks = tabs.Select(t => t.GetVisualDescendants().OfType<TabMark>().SingleOrDefault()).ToList();
         Assert.True(viewModel.HasEngineUpdates);
-        Assert.Equal([(false, true), (false, false), (false, true)], marks.Select(m => m.Shown));
-        Assert.Equal("1 operation failed", ToolTip.GetTip(tabs[2]));
+        Assert.Equal<(bool, bool)?>([(false, true), null, (false, false), (false, true)], marks.Select(m => m?.Shown));
+        Assert.Equal("1 operation failed", ToolTip.GetTip(tabs[3]));
         Assert.Equal(placesBefore, tabs.Select(t => t.Bounds));
 
         // The ✕ beside Resume: a square as tall as Resume, inside the card.
@@ -412,14 +413,14 @@ public class ScreenshotTests
         // The failed one put in the history: the dot shows the work still going on, in blue. Then nothing runs: no dot.
         viewModel.Operations.Single(o => o.IsFailed).MoveToHistoryCommand.Execute(null);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal((true, false), marks[2].Shown);
-        Assert.Null(ToolTip.GetTip(tabs[2]));
+        Assert.Equal((true, false), marks[3]!.Shown);
+        Assert.Null(ToolTip.GetTip(tabs[3]));
         Save(window, "downloads-working.png");
         viewModel.Operations[0].State = OperationState.Cancelled;
         viewModel.UpdateBusy();
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal((false, false), marks[2].Shown);
-        Assert.False(marks[2].GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single().IsVisible);
+        Assert.Equal((false, false), marks[3]!.Shown);
+        Assert.False(marks[3]!.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().Single().IsVisible);
         Assert.Equal(placesBefore, tabs.Select(t => t.Bounds));
     }
 
@@ -1138,7 +1139,7 @@ public class ScreenshotTests
         viewModel.Fab.SetItems(library, vault, installs);
     }
 
-    private static MainViewModel SampleMainViewModel()
+    internal static MainViewModel SampleMainViewModel()
     {
         // A history file nobody else writes: what other tests leave in the shared one isn't the screenshots' to show.
         string history = Path.Combine(Path.GetTempPath(), $"unvault-history-{Guid.NewGuid():N}.json");
@@ -1203,7 +1204,7 @@ public class ScreenshotTests
         };
     }
 
-    private static Window Show(MainViewModel viewModel)
+    internal static Window Show(MainViewModel viewModel)
     {
         var window = new MainWindow { DataContext = viewModel, Width = 1100, Height = 760 };
         window.Show();
@@ -1212,7 +1213,7 @@ public class ScreenshotTests
     }
 
     /// <summary>Pumps the UI thread until background recalculations have landed.</summary>
-    private static void WaitFor(Func<bool> condition)
+    internal static void WaitFor(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (!condition() && DateTime.UtcNow < deadline)
@@ -1223,7 +1224,7 @@ public class ScreenshotTests
         Assert.True(condition(), "Timed out waiting for the view model to update.");
     }
 
-    private static void Save(Window window, string name)
+    internal static void Save(Window window, string name)
     {
         Directory.CreateDirectory(OutputDirectory);
         Dispatcher.UIThread.RunJobs();
