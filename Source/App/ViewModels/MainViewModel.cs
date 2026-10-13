@@ -513,9 +513,10 @@ public partial class MainViewModel : ViewModelBase
         {
             await Services.Account.LogoutAsync();
         }
-        catch (Exception ex) when (ex is EpicAPIException or HttpRequestException)
+        catch (Exception ex) when (ex is EpicAPIException or HttpRequestException or OperationCanceledException)
         {
-            // The local session is deleted regardless; Epic will expire the tokens on its own.
+            // The local session is deleted regardless; Epic will expire the tokens on its own. No answer in time is one
+            // of these too: what follows must still run, or the sign-in browser would sign the next person in as this one.
         }
         FabLibraryCache.Delete();
         OwnedEnginesCache.Delete();

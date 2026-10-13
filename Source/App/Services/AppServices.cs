@@ -7,10 +7,15 @@ namespace UnVault.App.Services;
 /// <summary>Process-wide singletons: one HTTP client, the signed-in account, the API client.</summary>
 public sealed class AppServices
 {
-    public AppServices()
+    public AppServices() : this(EpicHTTP.CreateClient(), SessionStore.Default)
     {
-        HTTP = EpicHTTP.CreateClient();
-        Account = new EpicAccount(new EpicAuthClient(HTTP), SessionStore.Default);
+    }
+
+    /// <summary>Tests give their own connection to Epic, and their own saved session.</summary>
+    internal AppServices(HttpClient http, SessionStore sessions)
+    {
+        HTTP = http;
+        Account = new EpicAccount(new EpicAuthClient(HTTP), sessions);
         API = new EpicAPIClient(HTTP, Account);
         Thumbnails = new ThumbnailCache(HTTP);
         Updates = new UpdateChecker(HTTP);

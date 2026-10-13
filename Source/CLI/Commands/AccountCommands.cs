@@ -65,9 +65,10 @@ internal sealed class LogoutCommand : EpicCommand<NoSettings>
         {
             await Services.Account.LogoutAsync(cancellationToken);
         }
-        catch (Exception ex) when (ex is EpicAPIException or HttpRequestException)
+        catch (Exception ex) when (ex is EpicAPIException or HttpRequestException or OperationCanceledException)
         {
-            // The saved session is deleted either way; Epic expires the tokens on its own.
+            // The saved session is deleted either way; Epic expires the tokens on its own. No answer in time (or Ctrl+C)
+            // still clears the rest below, so the app's sign-in browser doesn't keep the account.
             AnsiConsole.MarkupLine($"[yellow]Couldn't tell Epic:[/] {Markup.Escape(ex.Message)}");
         }
         FabLibraryCache.Delete();

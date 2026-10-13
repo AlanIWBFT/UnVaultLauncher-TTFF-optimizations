@@ -2,6 +2,7 @@ using Avalonia.Headless.XUnit;
 using UnVault.App.Services;
 using UnVault.App.ViewModels;
 using UnVault.App.Views;
+using UnVault.Core.Epic;
 
 namespace UnVault.App.Tests;
 
@@ -54,10 +55,55 @@ public class SignInTests
         Assert.Null(viewModel.Notice);
     }
 
+    /// <summary>
+    /// Epic not answering the sign-out in time stops nothing: the sign-in browser still forgets the account, or the next
+    /// Sign In would go straight back into it, whoever is at the PC.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Signing_out_finishes_when_Epic_doesnt_answer_in_time()
+    {
+        string file = Path.Combine(Path.GetTempPath(), $"unvault-session-{Guid.NewGuid():N}.dat");
+        try
+        {
+            var sessions = new SessionStore(file);
+            sessions.Save(new EpicAuthSession
+            {
+                AccessToken = "eg1~access", AccessExpiresAt = DateTimeOffset.UtcNow.AddHours(2),
+                RefreshToken = "eg1~refresh", RefreshExpiresAt = DateTimeOffset.UtcNow.AddHours(8),
+                AccountID = "0a1b2c3d4e5f60718293a4b5c6d7e8f9", DisplayName = "Test Account",
+            });
+            var interaction = new FakeInteraction(forgets: true);
+            var viewModel = new MainViewModel(new AppServices(new HttpClient(new NoAnswer()), sessions)) { Interaction = interaction };
+            Assert.True(viewModel.Services.Account.IsLoggedIn);
+
+            await viewModel.SignOutCommand.ExecuteAsync(null);
+
+            Assert.True(interaction.Forgot);
+            Assert.False(viewModel.Services.Account.IsLoggedIn);
+            Assert.False(File.Exists(file));
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    /// <summary>How an HttpClient reports a request that ran past its time limit.</summary>
+    private sealed class NoAnswer : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout.", new TimeoutException());
+    }
+
     private sealed class FakeInteraction(bool forgets) : IUserInteraction
     {
+        public bool Forgot { get; private set; }
         public Task<string?> SignInAsync() => Task.FromResult<string?>(null);
-        public Task<bool> ForgetSignInAsync() => Task.FromResult(forgets);
+        public Task<bool> ForgetSignInAsync()
+        {
+            Forgot = true;
+            return Task.FromResult(forgets);
+        }
         public Task<string?> PickFolderAsync(string title, string? startPath) => Task.FromResult<string?>(null);
         public Task<string?> PickFileAsync(string title, string? startPath, string fileTypeName, string pattern) => Task.FromResult<string?>(null);
     }
