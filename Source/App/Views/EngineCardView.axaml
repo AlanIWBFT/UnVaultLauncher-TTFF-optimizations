@@ -33,10 +33,11 @@
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" Margin="0,0,16,0" VerticalAlignment="Center">
                 <Button Content="{x:Static s:Strings.Launch}" Classes="accent" Command="{Binding LaunchCommand}" IsVisible="{Binding IsInstalled}" />
                 <Button Content="{x:Static s:Strings.InstallEllipsis}" Classes="accent" Command="{Binding InstallCommand}" IsVisible="{Binding CanInstall}" />
-                <Button Content="{x:Static s:Strings.Options}" Command="{Binding ModifyCommand}" IsVisible="{Binding IsInstalled}" />
                 <Button Content="⋯" IsVisible="{Binding IsInstalled}" ToolTip.Tip="{x:Static s:Strings.More}" AutomationProperties.Name="{x:Static s:Strings.More}">
                     <Button.Flyout>
+                        <!-- Options (the components installed) first: used now and then, so not a button of its own -->
                         <MenuFlyout>
+                            <MenuItem Header="{x:Static s:Strings.Options}" Command="{Binding ModifyCommand}" />
                             <MenuItem Header="{x:Static s:Strings.InstalledPlugins}" Command="{Binding OpenPluginsCommand}" />
                             <MenuItem Header="{x:Static s:Strings.VerifyFiles}" Command="{Binding VerifyCommand}" />
                             <MenuItem Header="{x:Static s:Strings.InstallPrerequisites}" Command="{Binding InstallPrerequisitesCommand}"

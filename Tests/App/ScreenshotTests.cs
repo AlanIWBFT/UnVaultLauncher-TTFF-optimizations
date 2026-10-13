@@ -47,6 +47,14 @@ public class ScreenshotTests
         Assert.Equal(["5.8.3", "5.7.4", "5.6.1", "5.5.3", "4.27.2"], viewModel.Engines.Select(e => e.ShownVersion));
         var tile = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("versionTile") && b.Classes.Contains("installed"));
         Assert.Equal("Unreal Engine 5.7.4", AutomationProperties.GetName(tile));
+
+        // Launch and ⋯ on an installed engine's card; Options, used now and then, is the first thing under ⋯.
+        var card = window.GetVisualDescendants().OfType<EngineCardView>().First(c => c.DataContext is EngineCardViewModel { IsInstalled: true });
+        var buttons = card.GetVisualDescendants().OfType<Button>().Where(b => b.IsVisible).ToList();
+        Assert.Equal(["Launch", "⋯"], buttons.Select(b => b.Content as string));
+        var more = Assert.IsType<MenuFlyout>(buttons[1].Flyout);
+        Assert.Equal(["Options", "Installed Plugins", "Verify Files", "Install Prerequisites", "Show in Folder"],
+            more.Items.OfType<MenuItem>().Select(i => i.Header as string));
         Save(window, "engines.png");
     }
 
