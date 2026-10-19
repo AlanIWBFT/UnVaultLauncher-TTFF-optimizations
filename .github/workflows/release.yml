@@ -74,6 +74,11 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Build patched Windows backend
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: dotnet Build/Avalonia/BuildPatchedAvalonia.cs
+
       - name: Build
         run: dotnet build UnVault.sln -c Release -warnaserror
 

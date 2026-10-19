@@ -20,6 +20,36 @@ internal sealed record WindowPlacement(double Width, double Height, int X, int Y
     /// <summary>How far into the window a point must be on a screen for it to count as there: enough title bar to drag.</summary>
     private const int Grip = 48;
 
+    /// <summary>Place the recording pair inside a centered 2560×1440 physical-pixel area, before either window is shown.</summary>
+    internal static bool TryApplyComparison(Window window)
+    {
+        if (Environment.GetEnvironmentVariable("UNVAULT_COMPARE") != "1" || window.Screens.Primary is not { } screen)
+            return false;
+
+        string? mode = Environment.GetEnvironmentVariable("UNVAULT_RENDERING");
+        bool hardware = mode == "hardware";
+        var area = screen.WorkingArea;
+        int width = Math.Min(2560, area.Width), height = Math.Min(1440, area.Height);
+        const int gap = 16;
+        int slotWidth = (width - gap) / 2;
+        int x = area.X + (area.Width - width) / 2;
+        int y = area.Y + (area.Height - height) / 2;
+
+        // Width/Height describe the client in DIPs; Position and the recording area use physical pixels.
+        var frame = window.FrameSize ?? window.ClientSize;
+        double clientWidth = Math.Max(1, slotWidth / screen.Scaling - (frame.Width - window.ClientSize.Width));
+        double clientHeight = Math.Max(1, height / screen.Scaling - (frame.Height - window.ClientSize.Height));
+        window.MinWidth = Math.Min(window.MinWidth, clientWidth);
+        window.MinHeight = Math.Min(window.MinHeight, clientHeight);
+        window.Width = clientWidth;
+        window.Height = clientHeight;
+        window.WindowState = WindowState.Normal;
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Position = new PixelPoint(x + (hardware ? slotWidth + gap : 0), y);
+        window.Title += hardware ? " — Hardware (right)" : mode == "warp" ? " — WARP (left)" : " — WARP → Hardware (left)";
+        return true;
+    }
+
     /// <summary>The saved placement; null when there's none or it can't be read.</summary>
     public static WindowPlacement? Load(string? path = null)
     {

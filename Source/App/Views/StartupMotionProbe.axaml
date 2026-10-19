@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:UnVault.App.Views"
+             x:Class="UnVault.App.Views.StartupMotionProbe"
+             IsHitTestVisible="False" HorizontalAlignment="Stretch" VerticalAlignment="Bottom"
+             MaxWidth="520" Margin="24,0,24,20">
+    <Border Background="{StaticResource CardBackgroundBrush}" BorderBrush="{StaticResource CardBorderBrush}"
+            BorderThickness="1" CornerRadius="10" Padding="16,10">
+        <StackPanel Spacing="4">
+            <TextBlock Text="STARTUP MOTION PROBE · 2 s cycle" FontSize="11" Foreground="{StaticResource MutedTextBrush}" />
+            <views:StartupMotionAnimation Height="56" AccentBrush="{StaticResource AccentTextBrush}"
+                                          TrackBrush="{StaticResource MutedTextBrush}" />
+        </StackPanel>
+    </Border>
+</UserControl>
