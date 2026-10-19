@@ -1,0 +1,282 @@
+diff --git a/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleD3DTextureFeature.cs b/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleD3DTextureFeature.cs
+index f2e2f27..36da6dc 100644
+--- a/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleD3DTextureFeature.cs
++++ b/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleD3DTextureFeature.cs
+@@ -1,3 +1,4 @@
++using System;
+ using System.Runtime.InteropServices;
+ using Avalonia.OpenGL;
+ using Avalonia.OpenGL.Egl;
+@@ -10,6 +11,10 @@ namespace Avalonia.Win32.OpenGl.Angle;
+ 
+ internal class AngleD3DTextureFeature  : IGlPlatformSurfaceRenderTargetFactory
+ {
++    private readonly Action? _frameRendered;
++
++    public AngleD3DTextureFeature(Action? frameRendered = null) => _frameRendered = frameRendered;
++
+     public bool CanRenderToSurface(IGlContext context, IPlatformRenderSurface surface) =>
+         context is EglContext
+         {
+@@ -20,13 +25,15 @@ private class RenderTargetWrapper : EglPlatformSurfaceRenderTargetBase
+     {
+         private readonly AngleWin32EglDisplay _angle;
+         private readonly IDirect3D11TextureRenderTarget2 _target;
++        private readonly Action? _frameRendered;
+ 
+         public RenderTargetWrapper(EglContext context,
+             AngleWin32EglDisplay angle,
+-            IDirect3D11TextureRenderTarget2 target) : base(context)
++            IDirect3D11TextureRenderTarget2 target, Action? frameRendered) : base(context)
+         {
+             _angle = angle;
+             _target = target;
++            _frameRendered = frameRendered;
+         }
+ 
+         public override IGlPlatformSurfaceRenderingSession BeginDrawCore(IRenderTarget.RenderTargetSceneInfo sceneInfo)
+@@ -60,6 +67,7 @@ public override IGlPlatformSurfaceRenderingSession BeginDrawCore(IRenderTarget.R
+                     using (surface)
+                     {
+                     }
++                    _frameRendered?.Invoke();
+                 }, true);
+                 success = true;
+                 return rv;
+@@ -95,7 +103,7 @@ public IGlPlatformSurfaceRenderTarget CreateRenderTarget(IGlContext context, IPl
+         try
+         {
+             var target = textureSurface.CreateRenderTarget(context, angle.GetDirect3DDevice());
+-            return new RenderTargetWrapper(ctx, angle, target);
++            return new RenderTargetWrapper(ctx, angle, target, _frameRendered);
+         }
+         catch (COMException com)
+         {
+diff --git a/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleWin32EglDisplay.cs b/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleWin32EglDisplay.cs
+index afee6ef..31eecd7 100644
+--- a/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleWin32EglDisplay.cs
++++ b/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleWin32EglDisplay.cs
+@@ -51,6 +51,12 @@ public static AngleWin32EglDisplay CreateSharedD3D11Display(EglInterface egl)
+         }
+ 
+         public static unsafe AngleWin32EglDisplay CreateD3D11Display(Win32AngleEglInterface egl)
++        {
++            using var device = CreateD3D11Device();
++            return CreateD3D11Display(egl, device);
++        }
++
++        public static unsafe ID3D11Device CreateD3D11Device(bool software = false)
+         {
+             var featureLevels = new[]
+             {
+@@ -61,7 +67,9 @@ public static unsafe AngleWin32EglDisplay CreateD3D11Display(Win32AngleEglInterf
+             };
+ 
+             var dxgiFactoryGuid = MicroComRuntime.GetGuidFor(typeof(IDXGIFactory1));
+-            DirectXUnmanagedMethods.CreateDXGIFactory1(ref dxgiFactoryGuid, out var pDxgiFactory);
++            void* pDxgiFactory = null;
++            if (!software)
++                DirectXUnmanagedMethods.CreateDXGIFactory1(ref dxgiFactoryGuid, out pDxgiFactory);
+             IDXGIAdapter1? chosenAdapter = null;
+             if (pDxgiFactory != null)
+             {
+@@ -135,7 +143,7 @@ public static unsafe AngleWin32EglDisplay CreateD3D11Display(Win32AngleEglInterf
+             IntPtr pD3dDevice;
+             using (chosenAdapter)
+                 DirectXUnmanagedMethods.D3D11CreateDevice(chosenAdapter?.GetNativeIntPtr() ?? IntPtr.Zero,
+-                    D3D_DRIVER_TYPE.D3D_DRIVER_TYPE_UNKNOWN,
++                    software ? D3D_DRIVER_TYPE.D3D_DRIVER_TYPE_WARP : D3D_DRIVER_TYPE.D3D_DRIVER_TYPE_UNKNOWN,
+                     IntPtr.Zero, 0, featureLevels, (uint)featureLevels.Length,
+                     7, out pD3dDevice, out _, null);
+ 
+@@ -143,7 +151,12 @@ public static unsafe AngleWin32EglDisplay CreateD3D11Display(Win32AngleEglInterf
+             if (pD3dDevice == IntPtr.Zero)
+                 throw new Win32Exception("Unable to create D3D11 Device");
+ 
+-            var d3dDevice = MicroComRuntime.CreateProxyFor<ID3D11Device>(pD3dDevice, true);
++            return MicroComRuntime.CreateProxyFor<ID3D11Device>(pD3dDevice, true);
++        }
++
++        public static unsafe AngleWin32EglDisplay CreateD3D11Display(Win32AngleEglInterface egl, ID3D11Device device)
++        {
++            var d3dDevice = device.CloneReference();
+             var angleDevice = IntPtr.Zero;
+             var display = IntPtr.Zero;
+ 
+@@ -157,7 +170,7 @@ void Cleanup()
+             bool success = false;
+             try
+             {
+-                angleDevice = egl.CreateDeviceANGLE(EGL_D3D11_DEVICE_ANGLE, pD3dDevice, null);
++                angleDevice = egl.CreateDeviceANGLE(EGL_D3D11_DEVICE_ANGLE, d3dDevice.GetNativeIntPtr(), null);
+                 if (angleDevice == IntPtr.Zero)
+                     throw OpenGlException.GetFormattedException("eglCreateDeviceANGLE", egl);
+ 
+diff --git a/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs b/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs
+index 05cfc96..836633e 100644
+--- a/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs
++++ b/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs
+@@ -2,11 +2,14 @@
+ using System.Collections.Generic;
+ using System.Linq;
+ using System.Threading;
++using System.Threading.Tasks;
+ using Avalonia.Logging;
+ using Avalonia.OpenGL;
+ using Avalonia.OpenGL.Angle;
+ using Avalonia.OpenGL.Egl;
+ using Avalonia.Platform;
++using Avalonia.Threading;
++using Avalonia.Win32.DirectX;
+ 
+ namespace Avalonia.Win32.OpenGl.Angle;
+ 
+@@ -14,11 +17,15 @@ internal sealed class D3D11AngleWin32PlatformGraphics : IPlatformGraphics, IPlat
+ {
+     private readonly Win32AngleEglInterface _egl;
+     private AngleWin32EglDisplay? _initialDisplay;
++    private EglContext? _nextContext;
++    private bool _useSoftware;
++    private readonly TaskCompletionSource<bool> _firstFrame = new(TaskCreationOptions.RunContinuationsAsynchronously);
+ 
+-    public D3D11AngleWin32PlatformGraphics(Win32AngleEglInterface egl, AngleWin32EglDisplay? initialDisplay)
++    public D3D11AngleWin32PlatformGraphics(Win32AngleEglInterface egl, AngleWin32EglDisplay? initialDisplay, bool useSoftware = false)
+     {
+         _egl = egl;
+         _initialDisplay = initialDisplay;
++        _useSoftware = useSoftware;
+     }
+ 
+     public bool UsesSharedContext
+@@ -26,15 +33,24 @@ public bool UsesSharedContext
+ 
+     public IPlatformGraphicsContext CreateContext()
+     {
++        if (Interlocked.Exchange(ref _nextContext, null) is { } prepared)
++            return prepared;
+         var display = Interlocked.Exchange(ref _initialDisplay, null);
+         if (display is { IsLost: true })
++        {
++            display.Dispose();
+             display = null;
++        }
+ 
+-        display ??= AngleWin32EglDisplay.CreateD3D11Display(_egl);
++        if (display == null)
++        {
++            using var device = AngleWin32EglDisplay.CreateD3D11Device(_useSoftware);
++            display = AngleWin32EglDisplay.CreateD3D11Display(_egl, device);
++        }
+         return CreateContextForDisplay(display);
+     }
+ 
+-    private static EglContext CreateContextForDisplay(AngleWin32EglDisplay display)
++    private EglContext CreateContextForDisplay(AngleWin32EglDisplay display)
+     {
+         var success = false;
+         try
+@@ -44,7 +60,8 @@ private static EglContext CreateContextForDisplay(AngleWin32EglDisplay display)
+                 DisposeCallback = display.Dispose,
+                 ExtraFeatures = new Dictionary<Type, Func<EglContext, object>>
+                 {
+-                    [typeof(IGlPlatformSurfaceRenderTargetFactory)] = _ => new AngleD3DTextureFeature(),
++                    [typeof(IGlPlatformSurfaceRenderTargetFactory)] = _ => new AngleD3DTextureFeature(
++                        _useSoftware ? () => _firstFrame.TrySetResult(true) : null),
+                     [typeof(IGlContextExternalObjectsFeature)] = context => new AngleExternalObjectsFeature(context)
+                 }
+             });
+@@ -69,12 +86,65 @@ public IGlContext CreateContext(IEnumerable<GlVersion>? versions)
+     IPlatformGraphicsContext IPlatformGraphics.GetSharedContext()
+         => throw new InvalidOperationException();
+ 
++    private async Task PrepareHardwareAsync()
++    {
++        try
++        {
++            // Only create the native D3D device here. EGL and Skia stay on the compositor thread,
++            // avoiding ANGLE global locks during the software first frame.
++            using var device = AngleWin32EglDisplay.CreateD3D11Device();
++            await _firstFrame.Task.ConfigureAwait(false);
++            await Dispatcher.UIThread.InvokeAsync(() =>
++                Win32Platform.Compositor.InvokeServerJobAsync(() => SwitchToHardware(device), postTarget: true));
++        }
++        catch (Exception e)
++        {
++            Logger.TryGet(LogEventLevel.Warning, "OpenGL")
++                ?.Log(this, "Deferred hardware initialization failed; continuing on WARP: {0}", e);
++        }
++    }
++
++    private void SwitchToHardware(ID3D11Device device)
++    {
++        var compositor = Win32Platform.Compositor.Server;
++        compositor.VerifyAccess();
++
++        // Validate the new EGL context before touching the live WARP render targets.
++        var display = AngleWin32EglDisplay.CreateD3D11Display(_egl, device);
++        var context = CreateContextForDisplay(display);
++        try
++        {
++            using (context.MakeCurrent()) { }
++            compositor.ResetAllGpuResources();
++            _nextContext = context;
++            context = null;
++            _useSoftware = false;
++            compositor.RenderInterface.EnsureValidBackendContext();
++            Logger.TryGet(LogEventLevel.Information, "OpenGL")?.Log(this, "Deferred rendering switched from WARP to hardware.");
++        }
++        catch
++        {
++            _useSoftware = true;
++            Interlocked.Exchange(ref _nextContext, null)?.Dispose();
++            compositor.ResetAllGpuResources();
++            throw;
++        }
++        finally
++        {
++            context?.Dispose();
++            compositor.InvalidateAllCompositionTargets();
++            Dispatcher.UIThread.Post(() => Win32Platform.Compositor.RequestCommitAsync());
++        }
++    }
++
+     public static D3D11AngleWin32PlatformGraphics? TryCreate(Win32AngleEglInterface egl)
+     {
++        bool deferred = AvaloniaLocator.Current.GetService<Win32PlatformOptions>()?.UseDeferredHardwareRendering == true;
+         AngleWin32EglDisplay? display = null;
+         try
+         {
+-            display = AngleWin32EglDisplay.CreateD3D11Display(egl);
++            using var device = AngleWin32EglDisplay.CreateD3D11Device(deferred);
++            display = AngleWin32EglDisplay.CreateD3D11Display(egl, device);
+             using var ctx = display.CreateContext(new EglContextOptions());
+             ctx.MakeCurrent().Dispose();
+         }
+@@ -86,6 +156,9 @@ IPlatformGraphicsContext IPlatformGraphics.GetSharedContext()
+             return null;
+         }
+ 
+-        return new D3D11AngleWin32PlatformGraphics(egl, display);
++        var graphics = new D3D11AngleWin32PlatformGraphics(egl, display, deferred);
++        if (deferred)
++            _ = Task.Run(graphics.PrepareHardwareAsync);
++        return graphics;
+     }
+ }
+diff --git a/src/Windows/Avalonia.Win32/Win32PlatformOptions.cs b/src/Windows/Avalonia.Win32/Win32PlatformOptions.cs
+index 351b374..38afcd3 100644
+--- a/src/Windows/Avalonia.Win32/Win32PlatformOptions.cs
++++ b/src/Windows/Avalonia.Win32/Win32PlatformOptions.cs
+@@ -165,6 +165,12 @@ public class Win32PlatformOptions
+     /// </summary>
+     public IPlatformGraphics? CustomPlatformGraphics { get; set; }
+ 
++    /// <summary>
++    /// Start ANGLE/D3D11 rendering on WARP, then switch to a hardware device prepared in the background
++    /// after the first frame. If hardware initialization fails, continue using WARP.
++    /// </summary>
++    public bool UseDeferredHardwareRendering { get; set; }
++
+     /// <summary>
+     /// Gets or sets the application's DPI awareness.
+     /// </summary>

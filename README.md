@@ -26,9 +26,20 @@ Get `UnVaultLauncher-win-x64.zip` from [Releases](https://github.com/skxdoom/UnV
 
 Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download) and Visual Studio 2022 or later with the **Desktop development with C++** workload and Windows SDK, for Native AOT compilation.
 
+Git and GitHub CLI (`gh`) are also needed to build the patched Windows rendering backend.
+
 ```
+dotnet Build/Avalonia/BuildPatchedAvalonia.cs
 dotnet publish Source/App -p:PublishProfile=win-x64
 ```
+
+The first command checks out pinned Avalonia 12.1.3 sources under `Bin/dependencies`, applies `Build/Avalonia/deferred-d3d11.patch`, and builds a local `Avalonia.Win32` package in `Bin/packages`.
+Only this backend is replaced; other Avalonia packages stay at official 12.1.3. Re-run it after changing the patch, and bump the patched package version in both the build helper and app project to avoid NuGet cache reuse.
+The app starts rendering on WARP, prepares the hardware device in the background, and switches after its first frame. Set `UNVAULT_RENDERING=hardware` for synchronous hardware startup or `UNVAULT_RENDERING=warp` for fixed WARP rendering when comparing startup behavior.
+`UNVAULT_COMPARE=1` enables separate comparison instances, centered side-by-side placement, and a continuous motion probe driven by a shared system clock. The probe deliberately adds redraw activity for visual recording; it is not an FPS measurement.
+
+For native-backend smoke checks on Windows, build `Build/Avalonia/SmokeTest.cs` with `dotnet build Build/Avalonia/SmokeTest.cs -c Release`,
+then run `dotnet run --file Build/Avalonia/SmokeTest.cs -c Release --no-build -- switch`. Run it again with `hardware-failure` and `close-early` instead of `switch` to check fallback and early shutdown. Run these GPU checks serially.
 
 This puts `UnVaultLauncher-win-x64.zip` in the repository root. The unpacked app is in `Bin/publish/UnVault.App/native_win-x64/`. Native libraries are distributed alongside the executable instead of being extracted at startup.
 
