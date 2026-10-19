@@ -75,7 +75,7 @@ public static class EGLInstallations
                 SameApp(existing, entry.AppName) && (SameFolder(existing, entry.InstallLocation) || !Directory.Exists(Location(existing))));
 
             // Same field order as EGL writes.
-            list.Add(new JsonObject
+            list.Add((JsonNode)new JsonObject
             {
                 ["InstallLocation"] = entry.InstallLocation,
                 ["NamespaceId"] = entry.NamespaceID,

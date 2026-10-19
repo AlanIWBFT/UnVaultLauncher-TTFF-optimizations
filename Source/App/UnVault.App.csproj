@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+    <WebView2EnableCsWinRTProjection>true</WebView2EnableCsWinRTProjection>
+    <!-- WebView2 supplies its projection; only consume the C#/WinRT runtime and AOT generators. -->
+    <CsWinRTEnabled>false</CsWinRTEnabled>
     <OutputType>WinExe</OutputType>
     <AssemblyName>UnVaultLauncher</AssemblyName>
     <RootNamespace>UnVault.App</RootNamespace>
@@ -41,10 +47,18 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+    <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Core\UnVault.Core.csproj" />
   </ItemGroup>
+
+  <!-- Native packages also carry large PDBs; keep them out of the end-user archive. -->
+  <Target Name="ExcludePublishSymbols" AfterTargets="ComputeFilesToPublish" Condition="'$(PublishArchive)' != ''">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 
 </Project>

@@ -126,16 +126,15 @@ public static class VaultCache
         entry.ModifiedDate = now;
 
         AtomicFile.WriteAllBytes(entry.ManifestPath, rawManifest);
-        AtomicFile.WriteAllText(Path.Combine(entry.Directory, "vault.json"), JsonSerializer.Serialize(entry, typeof(VaultEntry), WriteOptions));
+        AtomicFile.WriteAllText(Path.Combine(entry.Directory, "vault.json"), JsonSerializer.Serialize(entry, WriteContext.VaultEntry));
     }
 
     // Indented, with '+' in build strings left readable, like EGL writes.
-    private static readonly JsonSerializerOptions WriteOptions = new()
+    private static readonly VaultJSONContext WriteContext = new(new JsonSerializerOptions
     {
         WriteIndented = true,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        TypeInfoResolver = VaultJSONContext.Default,
-    };
+    });
 }
 
 [JsonSerializable(typeof(VaultEntry))]

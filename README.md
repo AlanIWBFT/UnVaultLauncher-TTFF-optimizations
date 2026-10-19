@@ -20,17 +20,17 @@ A streamlined and lightweight launcher for installing and managing Unreal Engine
 
 ## Download
 
-Get `UnVaultLauncher.exe` from [Releases](https://github.com/skxdoom/UnVaultLauncher/releases/latest). It's a single file with nothing to install, for 64-bit Windows 10 or 11.
+Get `UnVaultLauncher-win-x64.zip` from [Releases](https://github.com/skxdoom/UnVaultLauncher/releases/latest). Extract it and run `UnVaultLauncher.exe`, keeping the DLLs beside it. No .NET installation is needed. Requires 64-bit Windows 10 (1809 or later) or Windows 11, with the WebView2 Runtime for embedded sign-in.
 
 ## Building
 
-Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download).
+Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download) and Visual Studio 2022 or later with the **Desktop development with C++** workload and Windows SDK, for Native AOT compilation.
 
 ```
 dotnet publish Source/App -p:PublishProfile=win-x64
 ```
 
-This puts `UnVaultLauncher.exe` in the repository root.
+This puts `UnVaultLauncher-win-x64.zip` in the repository root. The unpacked app is in `Bin/publish/UnVault.App/native_win-x64/`. Native libraries are distributed alongside the executable instead of being extracted at startup.
 
 There's also a command-line tool for engines, for scripting and diagnostics. It isn't included in releases; `dotnet publish Source/CLI -p:PublishProfile=win-x64` builds it as a single `UnVaultLauncher-CLI.exe` in the repository root. It can sign in, list the versions you own and the engines installed, install, modify, verify and repair engines, and list your Fab library. Installing Fab content and engine prerequisites is in the app only. Run it with `--help` for the commands.
 
