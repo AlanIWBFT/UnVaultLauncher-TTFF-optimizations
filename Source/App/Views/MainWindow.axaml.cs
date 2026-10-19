@@ -17,6 +17,7 @@ public partial class MainWindow : Window, IUserInteraction
         if (Environment.GetEnvironmentVariable("UNVAULT_COMPARE") == "1")
             WindowRoot.Children.Add(new StartupMotionProbe());
         DarkTitleBar.Apply(this);
+        WindowTransitions.SkipFirstShow(this);
         // Fetch tile pictures at the size the display actually needs (it can change when moved to another monitor).
         Opened += (_, _) => UseScaling();
         ScalingChanged += (_, _) => UseScaling();
