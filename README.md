@@ -41,6 +41,11 @@ The app starts rendering on WARP, prepares the hardware device in the background
 For native-backend smoke checks on Windows, build `Build/Avalonia/SmokeTest.cs` with `dotnet build Build/Avalonia/SmokeTest.cs -c Release`,
 then run `dotnet run --file Build/Avalonia/SmokeTest.cs -c Release --no-build -- switch`. Run it again with `hardware-failure` and `close-early` instead of `switch` to check fallback and early shutdown. Run these GPU checks serially.
 
+The main window stays DWM-cloaked until its initial rendering has crossed the native composition submission boundary, then appears without a reveal transition.
+To check this gate, build `Build/Avalonia/FirstFrameSmoke.cs` with `dotnet build Build/Avalonia/FirstFrameSmoke.cs -c Release`, then run
+`dotnet run --file Build/Avalonia/FirstFrameSmoke.cs -c Release --no-build -- reveal` and repeat with `close-early`.
+The reveal check deliberately delays the render-thread draw and verifies the native cloak flag during that delay and after a second show.
+
 This puts `UnVaultLauncher-win-x64.zip` in the repository root. The unpacked app is in `Bin/publish/UnVault.App/native_win-x64/`. Native libraries are distributed alongside the executable instead of being extracted at startup.
 
 There's also a command-line tool for engines, for scripting and diagnostics. It isn't included in releases; `dotnet publish Source/CLI -p:PublishProfile=win-x64` builds it as a single `UnVaultLauncher-CLI.exe` in the repository root. It can sign in, list the versions you own and the engines installed, install, modify, verify and repair engines, and list your Fab library. Installing Fab content and engine prerequisites is in the app only. Run it with `--help` for the commands.
