@@ -53,9 +53,9 @@ public partial class LoginWindow : Window
             await Task.Run(SignInBrowser.ClearPendingAsync);
 
             var handle = TryGetPlatformHandle()?.Handle ?? throw new InvalidOperationException("No native window handle.");
-            var environment = await CoreWebView2Environment.CreateAsync(browserExecutableFolder: null, userDataFolder: SignInBrowser.DataDirectory);
-            _controller = await environment.CreateCoreWebView2ControllerAsync(handle);
-            _controller.DefaultBackgroundColor = System.Drawing.Color.FromArgb(255, 14, 16, 20);
+            var environment = await CoreWebView2Environment.CreateWithOptionsAsync(null, SignInBrowser.DataDirectory, new CoreWebView2EnvironmentOptions());
+            _controller = await environment.CreateCoreWebView2ControllerAsync(CoreWebView2ControllerWindowReference.CreateFromWindowHandle((ulong)handle));
+            _controller.DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 14, 16, 20);
             AddressBar.IsVisible = true;
             UpdateBrowserBounds();
 
@@ -84,7 +84,8 @@ public partial class LoginWindow : Window
             browser.Navigate(EpicEndpoints.LoginURL);
             LoadingPanel.IsVisible = false;
         }
-        catch (Exception ex) when (ex is WebView2RuntimeNotFoundException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        // The WinRT projection reports a missing WebView2 Runtime as FileNotFoundException.
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException or System.Runtime.InteropServices.COMException)
         {
             ShowFallback(Localized.Format(Strings.BrowserUnavailable, ex.Message));
         }
@@ -144,7 +145,7 @@ public partial class LoginWindow : Window
             return;
         double scale = RenderScaling;
         double top = AddressBar.IsVisible ? AddressBar.Height : 0;
-        _controller.Bounds = new System.Drawing.Rectangle(0, (int)(top * scale), (int)(ClientSize.Width * scale), (int)((ClientSize.Height - top) * scale));
+        _controller.Bounds = new Windows.Foundation.Rect(0, (int)(top * scale), (int)(ClientSize.Width * scale), (int)((ClientSize.Height - top) * scale));
     }
 
     private void ShowFallback(string reason)
