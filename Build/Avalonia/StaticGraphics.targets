@@ -1,0 +1,40 @@
+<Project>
+  <!-- Import explicitly so the small Windows integration overrides below run after the pinned package's targets. -->
+  <Import Project="$(PkgStaticLink_Avalonia)/buildTransitive/StaticLink.Avalonia.props" Condition="Exists('$(PkgStaticLink_Avalonia)/buildTransitive/StaticLink.Avalonia.props')" />
+  <Import Project="$(PkgStaticLink_Avalonia)/buildTransitive/StaticLink.Avalonia.targets" Condition="Exists('$(PkgStaticLink_Avalonia)/buildTransitive/StaticLink.Avalonia.targets')" />
+
+  <!-- The package's constructor fix is necessary for its Zig-built libc++. Use PowerShell 7 without policy overrides. -->
+  <Target Name="StaticLinkAvaloniaPrepareCppInitializers" BeforeTargets="StaticLinkAvaloniaAddZigRuntime"
+          Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' == 'win-x64' and Exists('$(_StaticLinkAvaloniaNativeRoot)/zig-runtime/c++.lib')">
+    <PropertyGroup>
+      <_StaticLinkAvaloniaMsvcCpp>$(IntermediateOutputPath)staticlink-msvc/c++.lib</_StaticLinkAvaloniaMsvcCpp>
+    </PropertyGroup>
+    <Exec Command="pwsh -File &quot;$(PkgStaticLink_Avalonia)/buildTransitive/StaticLink.Avalonia.CppInitializers.ps1&quot; -InputLibrary &quot;$(_StaticLinkAvaloniaNativeRoot)/zig-runtime/c++.lib&quot; -OutputLibrary &quot;$(_StaticLinkAvaloniaMsvcCpp)&quot;" />
+    <ItemGroup>
+      <FileWrites Include="$(_StaticLinkAvaloniaMsvcCpp)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Omit dynamic graphics assets up front instead of copying and then deleting them after publish. -->
+  <Target Name="StaticLinkAvaloniaCleanDynamicAssets" />
+  <Target Name="ExcludeDynamicGraphicsAssets" AfterTargets="ComputeFilesToPublish" Condition="'$(PublishAot)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+        Condition="'%(ResolvedFileToPublish.Filename)' == 'av_libglesv2' or '%(ResolvedFileToPublish.Filename)' == 'libSkiaSharp' or '%(ResolvedFileToPublish.Filename)' == 'libHarfBuzzSharp'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="LinkStaticLongJump" BeforeTargets="LinkNative" DependsOnTargets="SetupOSSpecificProps"
+          Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' == 'win-x64'">
+    <PropertyGroup>
+      <_StaticLongJumpObject>$(IntermediateOutputPath)staticlink-msvc/StaticLongJump.obj</_StaticLongJumpObject>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)staticlink-msvc" />
+    <Exec Command="&quot;$(_CppToolsDirectory)cl.exe&quot; /c /MT /O2 /Zl /Fo&quot;$(_StaticLongJumpObject)&quot; &quot;$(MSBuildThisFileDirectory)StaticLongJump.cpp&quot;" />
+    <ItemGroup>
+      <LinkerArg Include="&quot;$(_StaticLongJumpObject)&quot;" />
+      <LinkerArg Include="/NODEFAULTLIB:vcruntime.lib;/DEFAULTLIB:libvcruntime.lib" />
+      <FileWrites Include="$(_StaticLongJumpObject)" />
+    </ItemGroup>
+  </Target>
+</Project>
