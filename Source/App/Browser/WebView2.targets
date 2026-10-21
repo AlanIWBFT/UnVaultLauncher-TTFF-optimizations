@@ -1,0 +1,26 @@
+<Project>
+  <!-- Consume only the official native loader. No SDK managed wrappers or WinRT component. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" GeneratePathProperty="true" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <_WebView2Arch>x64</_WebView2Arch>
+    <_WebView2Arch Condition="'$(RuntimeIdentifier)' == 'win-arm64' or '$(PlatformTarget)' == 'ARM64'">arm64</_WebView2Arch>
+    <_WebView2Arch Condition="'$(RuntimeIdentifier)' == 'win-x86' or '$(PlatformTarget)' == 'x86'">x86</_WebView2Arch>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Managed debug/test builds still use the dynamic loader; Native AOT resolves this call statically. -->
+    <Content Include="$(PkgMicrosoft_Web_WebView2)/runtimes/win-$(_WebView2Arch)/native/WebView2Loader.dll" Link="WebView2Loader.dll"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <DirectPInvoke Include="WebView2Loader" />
+    <NativeLibrary Include="$(PkgMicrosoft_Web_WebView2)/build/native/$(_WebView2Arch)/WebView2LoaderStatic.lib" />
+    <LinkerArg Include="version.lib;shlwapi.lib;ole32.lib;shell32.lib" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <!-- Old WinRT builds may have left these files in the publish directory. Never archive them. -->
+    <PublishArchiveExclude>$(PublishArchiveExclude);WebView2Loader.dll;Microsoft.Web.WebView2.Core.dll</PublishArchiveExclude>
+  </PropertyGroup>
+</Project>

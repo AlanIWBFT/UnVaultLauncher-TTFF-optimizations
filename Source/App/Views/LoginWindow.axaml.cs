@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Microsoft.Web.WebView2.Core;
+using UnVault.App.Browser;
 using UnVault.Core;
 using UnVault.Core.Epic;
 
@@ -19,7 +19,8 @@ public partial class LoginWindow : Window
 {
     private const string CodePagePrefix = "https://www.epicgames.com/id/api/redirect";
 
-    private CoreWebView2Controller? _controller;
+    private readonly WebViewHost _browser = new();
+    private bool _closed;
     private string? _code;
 
     public LoginWindow()
@@ -28,7 +29,7 @@ public partial class LoginWindow : Window
         DarkTitleBar.Apply(this);
         Opened += async (_, _) => await StartAsync();
         SizeChanged += (_, _) => UpdateBrowserBounds();
-        Closed += (_, _) => _controller?.Close();
+        Closed += (_, _) => { _closed = true; _browser.Dispose(); };
     }
 
 
@@ -51,18 +52,16 @@ public partial class LoginWindow : Window
         {
             // A sign-out that couldn't delete the browser's data: finish it, or the previous account would be signed in again.
             await Task.Run(SignInBrowser.ClearPendingAsync);
+            if (_closed) return;
 
             var handle = TryGetPlatformHandle()?.Handle ?? throw new InvalidOperationException("No native window handle.");
-            var environment = await CoreWebView2Environment.CreateWithOptionsAsync(null, SignInBrowser.DataDirectory, new CoreWebView2EnvironmentOptions());
-            _controller = await environment.CreateCoreWebView2ControllerAsync(CoreWebView2ControllerWindowReference.CreateFromWindowHandle((ulong)handle));
-            _controller.DefaultBackgroundColor = Windows.UI.Color.FromArgb(255, 14, 16, 20);
+            await _browser.InitializeAsync(handle, SignInBrowser.DataDirectory);
+            if (_closed) return;
             AddressBar.IsVisible = true;
             UpdateBrowserBounds();
 
-            var browser = _controller.CoreWebView2;
-            browser.Settings.AreDevToolsEnabled = false;
-            browser.Settings.IsStatusBarEnabled = false;
-            browser.NavigationStarting += (_, e) =>
+            var browser = _browser;
+            browser.NavigationStarting += e =>
             {
                 // Secure pages only, so nothing on the way can read or change what's typed; links that open other apps are refused.
                 if (!IsSecure(e.Uri))
@@ -71,34 +70,39 @@ public partial class LoginWindow : Window
                 else if (IsCodePage(e.Uri))
                     ShowBrowser(false, Strings.SigningIn);
             };
-            browser.LaunchingExternalUriScheme += (_, e) => e.Cancel = true;
             // Social logins (Google, Steam…) open popups; keep them in this window, where the address bar shows their site.
-            browser.NewWindowRequested += (_, e) =>
+            browser.NewWindowRequested += uri =>
             {
-                e.Handled = true;
-                if (IsSecure(e.Uri))
-                    browser.Navigate(e.Uri);
+                if (IsSecure(uri))
+                    browser.Navigate(uri);
             };
-            browser.SourceChanged += (_, _) => ShowSite(browser.Source);
-            browser.NavigationCompleted += async (_, _) => await CheckForCodeAsync(browser);
+            browser.SourceChanged += () => ShowSite(browser.Source);
+            browser.NavigationCompleted += async () =>
+            {
+                try { await CheckForCodeAsync(browser); }
+                catch (OperationCanceledException) when (_closed) { }
+            };
             browser.Navigate(EpicEndpoints.LoginURL);
             LoadingPanel.IsVisible = false;
         }
-        // The WinRT projection reports a missing WebView2 Runtime as FileNotFoundException.
-        catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        catch (ObjectDisposedException) when (_closed) { }
+        catch (Exception ex) when (ex is FileNotFoundException or InvalidOperationException or System.Runtime.InteropServices.COMException or InvalidCastException)
         {
+            if (_closed) return;
             ShowFallback(Localized.Format(Strings.BrowserUnavailable, ex.Message));
         }
     }
 
-    private async Task CheckForCodeAsync(CoreWebView2 browser)
+    private async Task CheckForCodeAsync(WebViewHost browser)
     {
         if (!IsCodePage(browser.Source))
             return;
 
         // The page body is the JSON with the code; ExecuteScriptAsync returns it as a JSON string literal.
         string result = await browser.ExecuteScriptAsync("document.body.innerText");
-        string text = JsonDocument.Parse(result).RootElement.GetString() ?? "";
+        if (_closed) return;
+        using var document = JsonDocument.Parse(result);
+        string text = document.RootElement.GetString() ?? "";
         string code = EpicAuthClient.ExtractAuthorizationCode(text);
         if (IsCode(code))
         {
@@ -116,8 +120,7 @@ public partial class LoginWindow : Window
     /// <summary>The browser is a window of its own over this one; while it's hidden, the loading panel under it shows.</summary>
     private void ShowBrowser(bool shown, string? loadingText = null)
     {
-        if (_controller is not null)
-            _controller.IsVisible = shown;
+        _browser.IsVisible = shown;
         LoadingPanel.IsVisible = !shown;
         if (loadingText is not null)
             LoadingText.Text = loadingText;
@@ -141,11 +144,9 @@ public partial class LoginWindow : Window
     /// <summary>The browser is a window of its own over this one, so it's placed by hand: everything below the address bar.</summary>
     private void UpdateBrowserBounds()
     {
-        if (_controller is null)
-            return;
         double scale = RenderScaling;
         double top = AddressBar.IsVisible ? AddressBar.Height : 0;
-        _controller.Bounds = new Windows.Foundation.Rect(0, (int)(top * scale), (int)(ClientSize.Width * scale), (int)((ClientSize.Height - top) * scale));
+        _browser.SetBounds(0, (int)(top * scale), (int)(ClientSize.Width * scale), (int)((ClientSize.Height - top) * scale));
     }
 
     private void ShowFallback(string reason)

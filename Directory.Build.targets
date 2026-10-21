@@ -11,6 +11,7 @@
     <ParameterGroup>
       <SourceDirectory ParameterType="System.String" Required="true" />
       <DestinationFile ParameterType="System.String" Required="true" />
+      <ExcludedFileNames ParameterType="System.String[]" />
     </ParameterGroup>
     <Task>
       <Using Namespace="System.IO" />
@@ -26,6 +27,7 @@
             foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.Ordinal))
             {
                 if (string.Equals(Path.GetExtension(file), ".pdb", StringComparison.OrdinalIgnoreCase) ||
+                    (ExcludedFileNames != null && ExcludedFileNames.Contains(Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)) ||
                     string.Equals(file, destination, StringComparison.OrdinalIgnoreCase))
                     continue;
                 var entry = archive.CreateEntry(file.Substring(root.Length).Replace('\\', '/'), CompressionLevel.Optimal);
@@ -41,6 +43,6 @@
 
   <!-- Native AOT's native dependencies stay beside the executable, with no extraction at startup. -->
   <Target Name="ArchivePublishedApp" AfterTargets="Publish" Condition="'$(PublishArchive)' != ''">
-    <ZipPublishedAppWithoutSymbols SourceDirectory="$(PublishDir)" DestinationFile="$(PublishArchive)" />
+    <ZipPublishedAppWithoutSymbols SourceDirectory="$(PublishDir)" DestinationFile="$(PublishArchive)" ExcludedFileNames="$(PublishArchiveExclude)" />
   </Target>
 </Project>
