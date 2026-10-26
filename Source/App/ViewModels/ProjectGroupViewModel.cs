@@ -22,19 +22,27 @@ public partial class ProjectGroupViewModel(ProjectsViewModel owner, ProjectCateg
     /// <summary>How many projects it has, shown after its name.</summary>
     public string CountText => Items.Count.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
 
-    public bool IsFolded => Category?.Folded ?? owner.Categories.UncategorizedFolded;
+    /// <summary>Only with a heading to unfold it by: without categories, the one list of every project never is.</summary>
+    public bool IsFolded => HasHeading && (Category?.Folded ?? owner.Categories.UncategorizedFolded);
 
     /// <summary>Its projects shown: unfolded, or while searching, so a match is never hidden.</summary>
     public bool IsOpen => !IsFolded || searching;
 
     /// <summary>A category with no projects yet says how to add some (not while searching: then it isn't shown at all).</summary>
-    public bool ShowsEmptyHint => IsOpen && Items.Count == 0;
+    public bool ShowsEmptyHint => Items.Count == 0;
 
     /// <summary>Only the user's own categories can be renamed or deleted.</summary>
     public bool CanEdit => Category is not null;
 
     [RelayCommand]
     private void ToggleFold() => owner.ToggleFold(this);
+
+    /// <summary>Folded or unfolded by its heading: shown on this group as it is, so its projects can slide, not built anew.</summary>
+    internal void FoldChanged()
+    {
+        OnPropertyChanged(nameof(IsFolded));
+        OnPropertyChanged(nameof(IsOpen));
+    }
 
     [RelayCommand]
     private void Rename() => owner.AskRename(this);

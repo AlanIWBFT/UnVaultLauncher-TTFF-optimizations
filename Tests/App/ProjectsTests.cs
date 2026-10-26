@@ -188,6 +188,11 @@ public sealed class ProjectsTests : IDisposable
         var (_, projects) = WithCategories(Project("Ridgeback", "5.7", DateTime.UtcNow), Project("hillside", "5.6"), Project("Lakeside", "5.5"));
 
         Assert.Equal([("", "hillside, Lakeside, Ridgeback")], Shown(projects)); // no heading, and the case doesn't count
+
+        // Uncategorized folded before the last category went: with no heading to unfold it by, the list still shows.
+        projects.Categories.UncategorizedFolded = true;
+        projects.SearchText = " ";
+        Assert.True(projects.Groups.Single().IsOpen);
     }
 
     /// <summary>
@@ -238,9 +243,12 @@ public sealed class ProjectsTests : IDisposable
         NewCategory(owner, projects.Items[0], "Demos");
         ProjectGroupViewModel Group(string title) => projects.Groups.Single(g => g.Title == title);
 
-        // Folded (and the Uncategorized ones too), kept so; a search still shows what matches inside.
-        Group("Demos").ToggleFoldCommand.Execute(null);
+        // Folded (and the Uncategorized ones too), kept so; a search still shows what matches inside. The page isn't built
+        // anew for it: the same group folds, so its projects can slide shut.
+        var demos = Group("Demos");
+        demos.ToggleFoldCommand.Execute(null);
         Group("Uncategorized").ToggleFoldCommand.Execute(null);
+        Assert.Same(demos, Group("Demos"));
         Assert.Equal([false, false], projects.Groups.Select(g => g.IsOpen));
         var saved = ProjectCategories.Load(projects.CategoriesPath);
         Assert.Equal((true, true), (saved.Categories.Single().Folded, saved.UncategorizedFolded));
@@ -328,6 +336,45 @@ public sealed class ProjectsTests : IDisposable
         Assert.False(projects.Groups[0].IsOpen);
         Dispatcher.UIThread.RunJobs();
         ScreenshotTests.Save(window, "projects-categories.png");
+    }
+
+    /// <summary>
+    /// Uncategorized can hold most of a library, many screens of it. Folded when the page was built, it still slides open,
+    /// and shut, as the eye sees it: the part of it on screen fills, and empties, over the slide, not at once.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_big_group_slides_open_and_shut_on_screen()
+    {
+        var viewModel = ScreenshotTests.SampleMainViewModel();
+        var projects = viewModel.Projects;
+        projects.CategoriesPath = Path.Combine(_dir, "project-categories.json");
+        var found = Enumerable.Range(1, 81).Select(i => Project($"Level{i:00}", "5.6")).ToArray();
+        new ProjectCategories
+        {
+            UncategorizedFolded = true,
+            Categories = [new ProjectCategory { Name = "Demos", Projects = [found[0].ProjectFile] }],
+        }.Save(projects.CategoriesPath);
+        projects.FindProjects = () => found;
+        projects.FindCustomEngines = () => SourceBuilds();
+        var window = ScreenshotTests.Show(viewModel);
+        viewModel.ShowProjectsCommand.Execute(null);
+        ScreenshotTests.WaitFor(() => projects.HasLoaded);
+        Dispatcher.UIThread.RunJobs();
+        var uncategorized = projects.Groups.Single(g => g.Title == "Uncategorized");
+        Assert.Equal(80, uncategorized.Items.Count);
+        var fold = window.GetVisualDescendants().OfType<FoldPanel>().Single(f => f.DataContext == uncategorized);
+        double room = window.ClientSize.Height - fold.TranslatePoint(default, window)!.Value.Y; // from its top to the window's bottom
+        double OnScreen() => Math.Min(fold.Bounds.Height, room);
+
+        uncategorized.ToggleFoldCommand.Execute(null);
+        Assert.Contains(FoldPanelTests.Slide(fold, OnScreen), shown => shown > room * 0.1 && shown < room * 0.9);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(fold.Bounds.Height > window.ClientSize.Height * 3, "all of it, once open");
+
+        uncategorized.ToggleFoldCommand.Execute(null);
+        Assert.Contains(FoldPanelTests.Slide(fold, OnScreen), shown => shown > room * 0.1 && shown < room * 0.9);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, fold.Bounds.Height);
     }
 
     [AvaloniaFact]

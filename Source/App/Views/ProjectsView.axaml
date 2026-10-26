@@ -24,10 +24,6 @@
             <Setter Property="StrokeJoin" Value="Round" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <!-- Folded: pointing right, at the projects it hides -->
-        <Style Selector="Path.chevron.folded">
-            <Setter Property="RenderTransform" Value="rotate(-90deg)" />
-        </Style>
     </UserControl.Styles>
 
     <!-- The search box, then the projects: two columns, one when the window is narrow. Loading and the count are on the tab row. -->
@@ -61,7 +57,12 @@
                                 <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8" IsVisible="{Binding HasHeading}">
                                     <Button Classes="groupHeading" Command="{Binding ToggleFoldCommand}">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <Path Classes="chevron" Classes.folded="{Binding !IsOpen}" Data="M2,4.5 L6,8.5 L10,4.5" />
+                                            <!-- Turned with the projects' slide: down when they show, right when folded away -->
+                                            <Path Classes="chevron" Data="M2,4.5 L6,8.5 L10,4.5">
+                                                <Path.RenderTransform>
+                                                    <RotateTransform Angle="{Binding #Fold.Openness, Converter={x:Static views:FoldPanel.ArrowAngle}}" />
+                                                </Path.RenderTransform>
+                                            </Path>
                                             <TextBlock><Run Text="{Binding Title}" FontWeight="SemiBold" /><Run Text="  " /><Run Text="{Binding CountText}" Foreground="{StaticResource MutedTextBrush}" /></TextBlock>
                                         </StackPanel>
                                     </Button>
@@ -75,19 +76,24 @@
                                         </Button.Flyout>
                                     </Button>
                                 </Grid>
-                                <TextBlock Text="{x:Static s:Strings.EmptyCategoryHint}" Classes="muted small" Margin="28,0,0,16" IsVisible="{Binding ShowsEmptyHint}" />
-                                <ItemsControl ItemsSource="{Binding Items}" Margin="0,0,0,16" IsVisible="{Binding IsOpen}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <views:ColumnsPanel MinColumnWidth="{x:Static views:ProjectsView.MinColumnWidth}" MaxColumns="2" Spacing="12" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="vm:ProjectCardViewModel">
-                                            <views:ProjectCardView />
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                <!-- Its projects slide shut when folded, and open again -->
+                                <views:FoldPanel x:Name="Fold" IsOpen="{Binding IsOpen}">
+                                    <StackPanel Margin="0,0,0,16">
+                                        <TextBlock Text="{x:Static s:Strings.EmptyCategoryHint}" Classes="muted small" Margin="28,0,0,0" IsVisible="{Binding ShowsEmptyHint}" />
+                                        <ItemsControl ItemsSource="{Binding Items}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <views:ColumnsPanel MinColumnWidth="{x:Static views:ProjectsView.MinColumnWidth}" MaxColumns="2" Spacing="12" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:ProjectCardViewModel">
+                                                    <views:ProjectCardView />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </views:FoldPanel>
                             </StackPanel>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>

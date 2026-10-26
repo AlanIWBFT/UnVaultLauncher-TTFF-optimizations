@@ -215,7 +215,8 @@ public partial class ProjectsViewModel(MainViewModel owner) : ViewModelBase
             category.Folded = !category.Folded;
         else
             Categories.UncategorizedFolded = !Categories.UncategorizedFolded;
-        CategoriesChanged();
+        Categories.Save(CategoriesPath);
+        group.FoldChanged(); // the page as it is, so the group slides shut or open
     }
 
     private void CategoriesChanged()
