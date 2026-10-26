@@ -398,6 +398,10 @@ public sealed class ProjectsTests : IDisposable
         ScreenshotTests.WaitFor(() => projects.HasLoaded && projects.Items.All(c => c.Size is not null));
         Assert.Equal("5 Projects", projects.Summary);
         Assert.True(projects.Items.Single(c => c.Name == "OldTown").IsEngineMissing); // UE 4.26 isn't among the sample engines
+        // Said in grey, not as a warning: an engine not installed may well be on purpose.
+        var notInstalled = window.GetVisualDescendants().OfType<ProjectCardView>().Single(c => c.DataContext is ProjectCardViewModel { Name: "OldTown" })
+            .GetVisualDescendants().OfType<Border>().Single(b => b.Classes.Contains("chip"));
+        Assert.Equal((true, false), (notInstalled.IsEffectivelyVisible, notInstalled.Classes.Contains("warning")));
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(2, Columns(window));
         ScreenshotTests.Save(window, "projects.png");

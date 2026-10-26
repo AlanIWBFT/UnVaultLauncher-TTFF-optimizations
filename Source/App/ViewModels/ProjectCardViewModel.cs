@@ -35,7 +35,7 @@ public partial class ProjectCardViewModel(ProjectsViewModel owner, UnrealProject
 
     public bool CanOpen => EngineDirectory is not null;
 
-    /// <summary>The engine it names isn't installed: the one thing on the card that wants a look.</summary>
+    /// <summary>The engine it names isn't installed: said, but not as a warning, as that may well be on purpose.</summary>
     public bool IsEngineMissing => EngineDirectory is null && Project.EngineAssociation.Length > 0;
 
     /// <summary>"UE 5.6"; a source build's, with its version when it can be read; or that it names no engine.</summary>

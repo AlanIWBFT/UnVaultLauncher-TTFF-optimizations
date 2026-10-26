@@ -17,7 +17,8 @@
                 </Panel>
             </Border>
 
-            <!-- Its name; where it is and how big (once counted), as engine cards start; the engine it's for, a chip only when that's not installed -->
+            <!-- Its name; where it is and how big (once counted), as engine cards start; the engine it's for, and a plain grey chip
+                 when that's not installed: no call for attention, as it may well be on purpose -->
             <StackPanel Grid.Column="1" Margin="16,12" Spacing="3" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
                 <!-- Left-aligned, so the size follows the folder; a long folder is cut short instead of the size -->
@@ -28,7 +29,7 @@
                 </Grid>
                 <WrapPanel ItemSpacing="8" LineSpacing="4">
                     <TextBlock Text="{Binding DetailsText}" Classes="muted small" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DetailsText}" />
-                    <Border Classes="chip compact warning" IsVisible="{Binding IsEngineMissing}" ToolTip.Tip="{Binding OpenTip}">
+                    <Border Classes="chip compact" IsVisible="{Binding IsEngineMissing}" ToolTip.Tip="{Binding OpenTip}">
                         <TextBlock Text="{x:Static s:Strings.NotInstalled}" />
                     </Border>
                 </WrapPanel>
