@@ -1495,4 +1495,8 @@
   <data name="EngineUpdateDetail_Other" xml:space="preserve">
     <value>Now {1}  ·  {0:N0} files changed</value>
   </data>
+  <data name="ProjectGroupCount" xml:space="preserve">
+    <value>({0:N0})</value>
+    <comment>After a category's name on the Projects tab: how many projects it has.</comment>
+  </data>
 </root>

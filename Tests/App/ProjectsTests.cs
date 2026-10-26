@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -333,14 +334,32 @@ public sealed class ProjectsTests : IDisposable
         viewModel.ShowProjectsCommand.Execute(null);
         ScreenshotTests.WaitFor(() => projects.HasLoaded && projects.Items.All(c => c.Size is not null));
         Assert.Equal(["Archive", "Demos", "Plugin Tests"], projects.Groups.Select(g => g.Title)); // all three in one: no Uncategorized
+        Assert.Equal(["(1)", "(2)", "(2)"], projects.Groups.Select(g => g.CountText));
         Assert.False(projects.Groups[0].IsOpen);
         Dispatcher.UIThread.RunJobs();
         ScreenshotTests.Save(window, "projects-categories.png");
+
+        // Under the pointer, a heading gets no box, as buttons do: it lights up instead, its name, arrow and count.
+        var heading = window.GetVisualDescendants().OfType<Button>().First(b => b.Classes.Contains("groupHeading"));
+        var texts = heading.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Classes.Contains("title") || t.Classes.Contains("count")).ToList();
+        var arrow = heading.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single();
+        var before = (texts.Select(t => t.Foreground).ToList(), arrow.Stroke);
+        window.MouseMove(heading.TranslatePoint(new Avalonia.Point(20, heading.Bounds.Height / 2), window)!.Value);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(heading.IsPointerOver);
+        Assert.Equal(2, texts.Count);
+        Assert.All(texts.Zip(before.Item1), pair => Assert.NotEqual(pair.Second, pair.First.Foreground));
+        Assert.NotEqual(before.Stroke, arrow.Stroke);
+        var presenter = heading.GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First();
+        Assert.Equal(Avalonia.Media.Colors.Transparent, (presenter.Background as Avalonia.Media.ISolidColorBrush)?.Color);
+        ScreenshotTests.Save(window, "projects-heading-hover.png");
     }
 
     /// <summary>
-    /// Uncategorized can hold most of a library, many screens of it. Folded when the page was built, it still slides open,
-    /// and shut, as the eye sees it: the part of it on screen fills, and empties, over the slide, not at once.
+    /// Uncategorized can hold most of a library, many screens of it. Folded when the page was built, it opens, and all of it
+    /// shows; partway open, the part of it on screen is partway filled, so it slides as the eye sees it rather than filling
+    /// at the slide's very start, as if it jumped open. Partway is set here, not timed: how many frames a machine draws in a
+    /// slide of so many cards varies (the slide itself is timed in <see cref="FoldPanelTests"/>).
     /// </summary>
     [AvaloniaFact]
     public void A_big_group_slides_open_and_shut_on_screen()
@@ -366,13 +385,27 @@ public sealed class ProjectsTests : IDisposable
         double room = window.ClientSize.Height - fold.TranslatePoint(default, window)!.Value.Y; // from its top to the window's bottom
         double OnScreen() => Math.Min(fold.Bounds.Height, room);
 
+        void Settled(double openness) => ScreenshotTests.WaitFor(() =>
+        {
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            return fold.Openness == openness;
+        });
+
         uncategorized.ToggleFoldCommand.Execute(null);
-        Assert.Contains(FoldPanelTests.Slide(fold, OnScreen), shown => shown > room * 0.1 && shown < room * 0.9);
+        Settled(1);
         Dispatcher.UIThread.RunJobs();
         Assert.True(fold.Bounds.Height > window.ClientSize.Height * 3, "all of it, once open");
 
+        fold.Transitions = null;
+        foreach (double partway in new[] { 0.2, 0.4 })
+        {
+            fold.Openness = partway;
+            Dispatcher.UIThread.RunJobs();
+            Assert.InRange(OnScreen(), room * 0.1, room * 0.9);
+        }
+
         uncategorized.ToggleFoldCommand.Execute(null);
-        Assert.Contains(FoldPanelTests.Slide(fold, OnScreen), shown => shown > room * 0.1 && shown < room * 0.9);
+        Settled(0);
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(0, fold.Bounds.Height);
     }

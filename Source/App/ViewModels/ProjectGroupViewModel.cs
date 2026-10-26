@@ -19,8 +19,8 @@ public partial class ProjectGroupViewModel(ProjectsViewModel owner, ProjectCateg
 
     public string Title => Category?.Name ?? Strings.Uncategorized;
 
-    /// <summary>How many projects it has, shown after its name.</summary>
-    public string CountText => Items.Count.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
+    /// <summary>How many projects it has, shown after its name: "(4)".</summary>
+    public string CountText => Localized.Format(Strings.ProjectGroupCount, Items.Count);
 
     /// <summary>Only with a heading to unfold it by: without categories, the one list of every project never is.</summary>
     public bool IsFolded => HasHeading && (Category?.Folded ?? owner.Categories.UncategorizedFolded);
