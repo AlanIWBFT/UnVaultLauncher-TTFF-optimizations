@@ -156,21 +156,8 @@ public static class FabWorkflow
     /// What an update has to write (files that are new or changed) and delete (files the new build no longer has).
     /// Without the old manifest everything is written.
     /// </summary>
-    internal static (List<FileManifest> Write, List<FileManifest> Delete) Diff(Manifest? old, Manifest current)
-    {
-        if (old is null)
-            return ([.. current.Files], []);
-
-        var before = old.Files.GroupBy(f => f.Filename, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-        var write = current.Files.Where(f => !before.TryGetValue(f.Filename, out var o) || !SameContent(o, f)).ToList();
-        var now = current.Files.Select(f => f.Filename).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var delete = old.Files.Where(f => !now.Contains(f.Filename)).ToList();
-        return (write, delete);
-
-        // Only trust a hash both builds actually have.
-        static bool SameContent(FileManifest a, FileManifest b) =>
-            a.FileSize == b.FileSize && a.SHA1.Length == 20 && a.SHA1.AsSpan().SequenceEqual(b.SHA1);
-    }
+    internal static (List<FileManifest> Write, List<FileManifest> Delete) Diff(Manifest? old, Manifest current) =>
+        old is null ? ([.. current.Files], []) : InstallWorkflow.Changes(old.Files, current.Files);
 
     private static Manifest? TryLoadManifest(string path)
     {

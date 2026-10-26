@@ -4,6 +4,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using UnVault.Core.Chunks;
+using UnVault.Core.EGL;
 using UnVault.Core.Epic;
 using UnVault.Core.Fab;
 using UnVault.Core.Install;
@@ -259,6 +260,87 @@ public sealed class InstallerTests : IDisposable
         Assert.Throws<IOException>(() => ContainedPath.Resolve(@"E:\Engines\UE_5.8", @"..\UE_5.7\Engine\x.dll"));
         Assert.Throws<IOException>(() => ContainedPath.Resolve(@"E:\Engines\UE_5.8", @"C:\Windows\x.dll"));
         Assert.Equal(@"E:\Engine\x.dll", ContainedPath.Resolve(@"E:\", "Engine/x.dll"));
+    }
+
+    /// <summary>
+    /// An engine update, as the Epic Games Launcher's: with the same components, only what's new or changed is downloaded;
+    /// what the new build dropped goes; the record and LauncherInstalled.dat name the new build. Stopped partway, it's
+    /// planned the same again and resumes.
+    /// </summary>
+    [Fact]
+    public async Task An_update_downloads_only_what_changed_and_resumes()
+    {
+        byte[] core1 = RandomNumberGenerator.GetBytes(1000), core2 = RandomNumberGenerator.GetBytes(1000), same = RandomNumberGenerator.GetBytes(1000),
+            dropped = RandomNumberGenerator.GetBytes(1000), added = RandomNumberGenerator.GetBytes(4000),
+            extra1 = RandomNumberGenerator.GetBytes(1000), extra2 = RandomNumberGenerator.GetBytes(1000);
+        var chunkFiles = new Dictionary<EpicGUID, byte[]>();
+        ChunkInfo Chunk(int id, byte[] content)
+        {
+            var (info, file) = ChunkFactory.Create(new EpicGUID((uint)id, 0, 0, 0), content);
+            chunkFiles[info.GUID] = file;
+            return info;
+        }
+        var (c1, c2, s, d, a1, a2, e1, e2) = (Chunk(0x10, core1), Chunk(0x11, core2), Chunk(0x20, same), Chunk(0x30, dropped),
+            Chunk(0x40, added[..2000]), Chunk(0x41, added[2000..]), Chunk(0x50, extra1), Chunk(0x51, extra2));
+        static FileManifest Entry(string name, byte[] content, string? tag, params ChunkPart[] parts) => new()
+        {
+            Filename = name, SHA1 = SHA1.HashData(content), FileSize = content.Length, ChunkParts = parts, InstallTags = tag is null ? [] : [tag],
+        };
+        static Manifest Build(string version, ChunkInfo[] chunks, params FileManifest[] files) => new()
+        {
+            Version = 21,
+            Meta = new ManifestMeta { FeatureLevel = 21, AppName = "UE_9.9", BuildVersion = version },
+            Chunks = chunks,
+            Files = files,
+            CustomFields = new Dictionary<string, string>(),
+        };
+        // 9.9.1 changes Core, keeps Same, drops Dropped, adds Added (two chunks), and changes the Extra component, not installed here.
+        var v0 = Build("9.9.0-1", [c1, s, d, e1],
+            Entry("Engine/Core.bin", core1, null, new ChunkPart(c1.GUID, 0, 1000)),
+            Entry("Engine/Same.bin", same, null, new ChunkPart(s.GUID, 0, 1000)),
+            Entry("Engine/Dropped.bin", dropped, null, new ChunkPart(d.GUID, 0, 1000)),
+            Entry("Engine/Extra.bin", extra1, "extra", new ChunkPart(e1.GUID, 0, 1000)));
+        var v1 = Build("9.9.1-2", [c2, s, a1, a2, e2],
+            Entry("Engine/Core.bin", core2, null, new ChunkPart(c2.GUID, 0, 1000)),
+            Entry("Engine/Same.bin", same, null, new ChunkPart(s.GUID, 0, 1000)),
+            Entry("Engine/Added.bin", added, null, new ChunkPart(a1.GUID, 0, 2000), new ChunkPart(a2.GUID, 0, 2000)),
+            Entry("Engine/Extra.bin", extra2, "extra", new ChunkPart(e2.GUID, 0, 1000)));
+        ChunkSource[] sources = [new("https://cdn.test/CloudDir")];
+        var noTags = new HashSet<string>(StringComparer.Ordinal);
+        await new Installer(new HttpClient(new FakeCDN(chunkFiles))).InstallAsync(InstallPlan.Create(v0, v0.SelectFiles(noTags)), _dir,
+            sources, new Dictionary<string, string>(), new InstallStatus(), default);
+        string manifestPath = Path.Combine(_dir, "build.manifest");
+        File.WriteAllBytes(manifestPath, [1, 2, 3]); // only copied into the record, never parsed here
+        var install = new ExistingInstall("UE_9.9", _dir, v0, manifestPath, noTags, sources, "test");
+        var source = new InstallSource(new DownloadedManifest(v1, [4, 5, 6], sources, new Dictionary<string, string>()), "ue", "0a1b2c3d");
+        string launcherInstalled = Path.Combine(_dir, "LauncherInstalled.dat");
+
+        var plan = InstallWorkflow.PlanUpdate(install, source);
+        Assert.Equal(["Engine/Added.bin", "Engine/Core.bin"], plan.Write.Files.Select(f => f.Filename).Order());
+        Assert.Equal(["Engine/Dropped.bin"], plan.Delete.Select(f => f.Filename));
+
+        // Stopped after Added's first chunk: nothing's deleted, and the record still names the old build.
+        var broken = new FakeCDN(chunkFiles) { Unavailable = { a2.GUID } };
+        await Assert.ThrowsAsync<InstallException>(() => InstallWorkflow.ApplyUpdateAsync(plan,
+            new Installer(new HttpClient(broken)) { MaxParallelDownloads = 1, RetryBaseDelay = TimeSpan.FromMilliseconds(1), GiveUpAfter = TimeSpan.Zero },
+            new InstallStatus(), default, launcherInstalled));
+        Assert.True(File.Exists(Path.Combine(_dir, "Engine/Dropped.bin")));
+        Assert.Null(InstallRecord.TryRead(_dir));
+        var again = InstallWorkflow.PlanUpdate(install, source);
+        Assert.Equal(plan.Write.ID, again.Write.ID); // the same download, so its journal applies
+
+        var cdn = new FakeCDN(chunkFiles);
+        await InstallWorkflow.ApplyUpdateAsync(again, new Installer(new HttpClient(cdn)), new InstallStatus(), default, launcherInstalled);
+
+        Assert.Equal(core2, File.ReadAllBytes(Path.Combine(_dir, "Engine/Core.bin")));
+        Assert.Equal(added, File.ReadAllBytes(Path.Combine(_dir, "Engine/Added.bin")));
+        Assert.Equal(same, File.ReadAllBytes(Path.Combine(_dir, "Engine/Same.bin")));
+        Assert.False(File.Exists(Path.Combine(_dir, "Engine/Dropped.bin")));
+        Assert.False(File.Exists(Path.Combine(_dir, "Engine/Extra.bin"))); // a component that isn't installed stays so
+        Assert.DoesNotContain(cdn.Requests, r => r.Contains(s.GUID.ToString()) || r.Contains(a1.GUID.ToString()) || r.Contains(e2.GUID.ToString()));
+        var record = InstallRecord.TryRead(_dir)!;
+        Assert.Equal(("9.9.1-2", 0, 1000L + 1000 + 4000), (record.BuildVersion, record.InstallTags.Count, record.InstallSize));
+        Assert.Equal("9.9.1-2", Assert.Single(EGLInstallations.ReadLauncherInstalledFrom(launcherInstalled)).AppVersion);
     }
 
     [Fact]

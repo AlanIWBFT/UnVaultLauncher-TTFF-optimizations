@@ -68,10 +68,23 @@ public partial class EngineCardViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsIdle))]
-    [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(ModifyCommand), nameof(VerifyCommand), nameof(InstallPrerequisitesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InstallCommand), nameof(ModifyCommand), nameof(VerifyCommand), nameof(InstallPrerequisitesCommand), nameof(UpdateCommand))]
     public partial bool IsBusy { get; set; }
 
     public bool IsIdle => !IsBusy;
+
+    /// <summary>Its files are being replaced by a newer build's: started meanwhile, the editor would load some of each.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(LaunchCommand))]
+    public partial bool IsUpdating { get; set; }
+
+    private bool CanLaunch => !IsUpdating;
+
+    private bool CanUpdate => HasUpdate && IsIdle;
+
+    /// <summary>To the build Epic has now; while there is one, Update takes Launch's place on the card, and Launch goes under ⋯.</summary>
+    [RelayCommand(CanExecute = nameof(CanUpdate))]
+    private void Update() => _owner.StartEngineUpdate(this);
 
     [RelayCommand(CanExecute = nameof(IsIdle))]
     private Task InstallAsync() => _owner.OpenInstallAsync(AppName);
@@ -88,7 +101,7 @@ public partial class EngineCardViewModel : ViewModelBase
     [RelayCommand]
     private Task OpenPluginsAsync() => _owner.OpenInstalledPluginsAsync(this);
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanLaunch))]
     private void Launch() => _owner.Launch(this);
 
     [RelayCommand]

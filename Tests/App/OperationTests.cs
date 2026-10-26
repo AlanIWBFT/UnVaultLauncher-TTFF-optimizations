@@ -81,6 +81,27 @@ public sealed class OperationTests : IDisposable
 
     private static bool Busy(MainViewModel viewModel, string app) => viewModel.Engines.Single(e => e.AppName == app).IsBusy;
 
+    /// <summary>
+    /// An engine whose files are being replaced by a newer build's can't be started meanwhile, or the editor would load some
+    /// of each; other work on an engine doesn't stop it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task An_engine_being_updated_cant_be_launched()
+    {
+        var viewModel = WithEngines();
+        EngineCardViewModel Engine(string app) => viewModel.Engines.Single(e => e.AppName == app);
+        var update = new Started(viewModel, "Unreal Engine 5.6", Does(OperationKind.Update), ["UE_5.6"]).Start();
+        var modify = new Started(viewModel, "Unreal Engine 5.7", Does(OperationKind.ModifyEngine), ["UE_5.7"]).Start();
+
+        Assert.Equal((true, false), (Engine("UE_5.6").IsUpdating, Engine("UE_5.6").LaunchCommand.CanExecute(null)));
+        Assert.Equal((false, true), (Engine("UE_5.7").IsUpdating, Engine("UE_5.7").LaunchCommand.CanExecute(null)));
+        Assert.False(Engine("UE_5.6").UpdateCommand.CanExecute(null)); // and not a second time
+
+        await update.PauseAsync();
+        Assert.True(Engine("UE_5.6").LaunchCommand.CanExecute(null));
+        await modify.PauseAsync();
+    }
+
     [AvaloniaFact]
     public async Task A_second_operation_on_the_same_engine_waits_for_the_first()
     {

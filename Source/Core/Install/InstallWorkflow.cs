@@ -18,6 +18,12 @@ public sealed record ModifyPlan(ExistingInstall Install, IReadOnlySet<string> Ne
     public long BytesFreed => ToRemove.Sum(f => f.FileSize);
 }
 
+/// <summary>
+/// What an update would do: the new build, the components kept, the files to download (new or changed) and those to delete
+/// (gone from the new build).
+/// </summary>
+public sealed record UpdatePlan(ExistingInstall Install, InstallSource Source, IReadOnlySet<string> Tags, InstallPlan Write, IReadOnlyList<FileManifest> Delete);
+
 /// <summary>The install/modify steps shared by the CLI and the GUI.</summary>
 public static class InstallWorkflow
 {
@@ -142,5 +148,84 @@ public static class InstallWorkflow
 
         install.ToRecord(plan.NewTags).Save(install.Directory, rawManifest);
         return cleaned;
+    }
+
+    /// <summary>
+    /// How to bring an install up to the build in <paramref name="source"/>, as the Epic Games Launcher updates: with the
+    /// same components (those the new build still has), downloading only the files that are new or changed, and deleting
+    /// those it no longer has.
+    /// </summary>
+    public static UpdatePlan PlanUpdate(ExistingInstall install, InstallSource source)
+    {
+        var manifest = source.Manifest;
+        if (!string.Equals(manifest.Meta.AppName, install.Manifest.Meta.AppName, StringComparison.OrdinalIgnoreCase))
+            throw new InstallException($"{manifest.Meta.AppName} isn't a build of {install.Manifest.Meta.AppName}.");
+
+        var offered = manifest.GetInstallTags().ToHashSet(StringComparer.Ordinal);
+        var tags = install.InstallTags.Where(offered.Contains).ToHashSet(StringComparer.Ordinal);
+        var after = manifest.SelectFiles(tags).Where(f => install.InstalledFilter is null || install.InstalledFilter.IsMatch(f.Filename));
+        var (write, delete) = Changes(install.SelectFiles(null), after);
+        return new UpdatePlan(install, source, tags, InstallPlan.Create(manifest, write), delete);
+    }
+
+    /// <summary>
+    /// Applies an update: the new and changed files are written over the old ones, then the files the new build dropped are
+    /// deleted, and the new build is recorded. The record names the old build until it's all done, so an update stopped
+    /// partway is planned the same again, and resumes where it stopped.
+    /// </summary>
+    /// <param name="launcherInstalledPath">Tests keep their own LauncherInstalled.dat.</param>
+    public static async Task<InstallCleaner.Result> ApplyUpdateAsync(UpdatePlan plan, Installer installer, InstallStatus status, CancellationToken cancellationToken,
+        string? launcherInstalledPath = null)
+    {
+        var (install, source) = (plan.Install, plan.Source);
+        await installer.InstallAsync(plan.Write, install.Directory, source.Downloaded.Sources, source.Downloaded.Secrets, status, cancellationToken);
+        var cleaned = await Task.Run(() => InstallCleaner.DeleteFiles(install.Directory, plan.Delete, cancellationToken), cancellationToken);
+
+        var manifest = source.Manifest;
+        new InstallRecord
+        {
+            AppName = manifest.Meta.AppName,
+            BuildVersion = manifest.Meta.BuildVersion,
+            CatalogNamespace = source.CatalogNamespace.Length > 0 ? source.CatalogNamespace : install.Record?.CatalogNamespace ?? "",
+            CatalogItemID = source.CatalogItemID.Length > 0 ? source.CatalogItemID : install.Record?.CatalogItemID ?? "",
+            InstallTags = [.. plan.Tags.Order(StringComparer.Ordinal)],
+            InstallSize = manifest.SelectFiles(plan.Tags).Where(f => install.InstalledFilter is null || install.InstalledFilter.IsMatch(f.Filename)).Sum(f => f.FileSize),
+            AdoptedFromEGL = install.Record?.AdoptedFromEGL ?? install.EGLItem is not null,
+            FileFilter = install.Record?.FileFilter,
+            BaseURLs = [.. source.Downloaded.Sources.Where(s => s.Query.Length == 0).Select(s => s.BaseURL)],
+            InstalledAt = install.Record?.InstalledAt ?? DateTimeOffset.Now,
+        }.Save(install.Directory, source.Downloaded.RawBytes);
+
+        // UE's tools read the version from here too.
+        if (install.InstalledFilter is null && IsEngine(manifest))
+        {
+            EGLInstallations.RegisterLauncherInstall(new LauncherInstalledEntry
+            {
+                InstallLocation = install.Directory,
+                NamespaceID = source.CatalogNamespace.Length > 0 ? source.CatalogNamespace : "ue",
+                ItemID = source.CatalogItemID,
+                ArtifactID = manifest.Meta.AppName,
+                AppVersion = manifest.Meta.BuildVersion,
+                AppName = manifest.Meta.AppName,
+            }, launcherInstalledPath);
+        }
+        return cleaned;
+    }
+
+    /// <summary>
+    /// What going from one set of files to another takes: the files to write (new, or changed) and those to delete (gone).
+    /// A file only counts as unchanged when both sides have its hash and they match.
+    /// </summary>
+    internal static (List<FileManifest> Write, List<FileManifest> Delete) Changes(IEnumerable<FileManifest> before, IEnumerable<FileManifest> after)
+    {
+        var old = before.GroupBy(f => f.Filename, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        var current = after.ToList();
+        var write = current.Where(f => !old.TryGetValue(f.Filename, out var o) || !SameContent(o, f)).ToList();
+        var now = current.Select(f => f.Filename).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var delete = old.Values.Where(f => !now.Contains(f.Filename)).ToList();
+        return (write, delete);
+
+        static bool SameContent(FileManifest a, FileManifest b) =>
+            a.FileSize == b.FileSize && a.SHA1.Length == 20 && a.SHA1.AsSpan().SequenceEqual(b.SHA1);
     }
 }

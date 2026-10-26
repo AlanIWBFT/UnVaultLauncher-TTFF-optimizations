@@ -49,12 +49,27 @@ public class ScreenshotTests
         Assert.Equal("Unreal Engine 5.7.4", AutomationProperties.GetName(tile));
 
         // Launch and ⋯ on an installed engine's card; Options, used now and then, is the first thing under ⋯.
-        var card = window.GetVisualDescendants().OfType<EngineCardView>().First(c => c.DataContext is EngineCardViewModel { IsInstalled: true });
-        var buttons = card.GetVisualDescendants().OfType<Button>().Where(b => b.IsVisible).ToList();
-        Assert.Equal(["Launch", "⋯"], buttons.Select(b => b.Content as string));
-        var more = Assert.IsType<MenuFlyout>(buttons[1].Flyout);
-        Assert.Equal(["Options", "Installed Plugins", "Verify Files", "Install Prerequisites", "Show in Folder"],
-            more.Items.OfType<MenuItem>().Select(i => i.Header as string));
+        List<Button> Buttons(string app) => [.. window.GetVisualDescendants().OfType<EngineCardView>()
+            .Single(c => c.DataContext is EngineCardViewModel e && e.AppName == app).GetVisualDescendants().OfType<Button>().Where(b => b.IsVisible)];
+        static List<string?> Menu(Button more)
+        {
+            var menu = Assert.IsType<MenuFlyout>(more.Flyout);
+            menu.ShowAt(more); // its items' bindings apply once it's open
+            Dispatcher.UIThread.RunJobs();
+            var shown = menu.Items.OfType<MenuItem>().Where(i => i.IsVisible).Select(i => i.Header as string).ToList();
+            menu.Hide();
+            return shown;
+        }
+        var current = Buttons("UE_5.7");
+        Assert.Equal(["Launch", "⋯"], current.Select(b => b.Content as string));
+        Assert.Equal(["Options", "Installed Plugins", "Verify Files", "Install Prerequisites", "Show in Folder"], Menu(current[1]));
+
+        // With an update, Update takes Launch's place, orange as on Library tiles, and Launch is the first thing under ⋯.
+        var outdated = Buttons("UE_5.5");
+        Assert.Equal(["Update", "⋯"], outdated.Select(b => b.Content as string));
+        Assert.Contains("update", outdated[0].Classes);
+        Assert.True(outdated[0].IsEffectivelyEnabled);
+        Assert.Equal(["Launch", "Options", "Installed Plugins", "Verify Files", "Install Prerequisites", "Show in Folder"], Menu(outdated[1]));
         Save(window, "engines.png");
     }
 

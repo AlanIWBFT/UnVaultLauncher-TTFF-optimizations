@@ -2,7 +2,7 @@
 
 A streamlined and lightweight launcher for installing and managing Unreal Engine, your projects, and Fab assets and plugins.
 
-- **Engines**: install, modify, verify and repair. Untick platforms, debug symbols or templates to save disk space.
+- **Engines**: install, update, modify, verify and repair. Untick platforms, debug symbols or templates to save disk space.
 - **Projects**: open and sort them into your own categories.
 - **Library**: install plugins into engines or projects (with optional recompilation), add asset packs to projects and create projects.
 - **Downloads**: pause, resume and retry, with a history.

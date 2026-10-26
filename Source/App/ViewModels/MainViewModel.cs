@@ -434,6 +434,7 @@ public partial class MainViewModel : ViewModelBase
                 ownedList.FirstOrDefault(o => Same(o.AppName, app)))
             {
                 IsBusy = IsEngineBusy(app),
+                IsUpdating = IsEngineUpdating(app),
             })
             .OrderByDescending(e => e.Version.Major)
             .ThenByDescending(e => e.Version.Minor)
@@ -451,6 +452,9 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>An operation is working on the engine, so nothing else may start on it.</summary>
     internal bool IsEngineBusy(string appName) => Operations.Any(o => o.IsRunning && o.WorksOn(appName));
+
+    /// <summary>The engine's own files, or a plugin's in it, are being replaced by a newer build's.</summary>
+    internal bool IsEngineUpdating(string appName) => Operations.Any(o => o.IsRunning && o.WorksOn(appName) && o.Action.Kind == OperationKind.Update);
 
     /// <summary>The running operation that works on the same engine or Library item, if any.</summary>
     internal OperationViewModel? RunningOverlap(OperationViewModel operation) =>
@@ -473,7 +477,7 @@ public partial class MainViewModel : ViewModelBase
     internal void UpdateBusy()
     {
         foreach (var engine in Engines)
-            engine.IsBusy = IsEngineBusy(engine.AppName);
+            (engine.IsBusy, engine.IsUpdating) = (IsEngineBusy(engine.AppName), IsEngineUpdating(engine.AppName));
         Fab.UpdateBusy();
         (Dialog as IShowsBusy)?.UpdateBusy();
         OperationsChanged();
@@ -672,6 +676,28 @@ public partial class MainViewModel : ViewModelBase
                 (true, null) => Localized.Format(Strings.ModifyDetailFreed, freed),
                 _ => null,
             };
+        }, [engine.AppName]));
+    }
+
+    /// <summary>
+    /// Brings an engine up to the build Epic has now, as the Epic Games Launcher does: with the same components, only the
+    /// files that are new or changed are downloaded, and those the new build dropped are deleted.
+    /// </summary>
+    internal void StartEngineUpdate(EngineCardViewModel engine)
+    {
+        if (engine is not { Local: { } local, Owned: { } owned })
+            return;
+        StartOperation(new OperationViewModel(this, engine.Title, new OperationAction(OperationKind.Update), async (operation, status, cancellationToken) =>
+        {
+            operation.SetPhase(Strings.PhaseReadingManifest);
+            var install = await Task.Run(local.Load, cancellationToken) ?? throw new InstallException(Strings.ManifestUnreadable);
+            var source = await InstallWorkflow.FetchAsync(Services.API, owned, cancellationToken);
+            var plan = await Task.Run(() => InstallWorkflow.PlanUpdate(install, source), cancellationToken);
+
+            operation.SetPhase(Strings.PhaseDownloading);
+            await InstallWorkflow.ApplyUpdateAsync(plan, CreateInstaller(), status, cancellationToken);
+            return Localized.Plural(nameof(Strings.EngineUpdateDetail_Other), plan.Write.Files.Count,
+                EngineLibrary.ShortBuildVersion(source.Manifest.Meta.BuildVersion));
         }, [engine.AppName]));
     }
 
