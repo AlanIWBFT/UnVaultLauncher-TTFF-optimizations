@@ -1,3 +1,29 @@
+diff --git a/src/Windows/Avalonia.Win32/IWin32FirstFrameFeature.cs b/src/Windows/Avalonia.Win32/IWin32FirstFrameFeature.cs
+new file mode 100644
+index 0000000..483a569
+--- /dev/null
++++ b/src/Windows/Avalonia.Win32/IWin32FirstFrameFeature.cs
+@@ -0,0 +1,20 @@
++using System;
++using System.Threading.Tasks;
++
++namespace Avalonia.Win32;
++
++/// <summary>Per-window startup synchronization provided by the Windows.UI.Composition backend.</summary>
++public interface IWin32FirstFrameFeature
++{
++    /// <summary>
++    /// Completes after the native composition commit containing this window's first successful draw.
++    /// This is a submission fence, not a physical display scan-out notification. Canceled if the window closes first.
++    /// </summary>
++    Task FirstFrameCommitted { get; }
++
++    /// <summary>
++    /// Prevent deferred hardware takeover until the returned lease is disposed. Acquire before showing the window,
++    /// then release after revealing it. Other windows cannot bypass an active lease.
++    /// </summary>
++    IDisposable DeferHardwareSwitch();
++}
 diff --git a/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleD3DTextureFeature.cs b/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleD3DTextureFeature.cs
 index f2e2f27..36da6dc 100644
 --- a/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleD3DTextureFeature.cs
@@ -113,10 +139,10 @@ index afee6ef..31eecd7 100644
                      throw OpenGlException.GetFormattedException("eglCreateDeviceANGLE", egl);
  
 diff --git a/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs b/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs
-index 05cfc96..836633e 100644
+index 05cfc96..40da106 100644
 --- a/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs
 +++ b/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs
-@@ -2,11 +2,14 @@
+@@ -2,11 +2,16 @@
  using System.Collections.Generic;
  using System.Linq;
  using System.Threading;
@@ -126,18 +152,23 @@ index 05cfc96..836633e 100644
  using Avalonia.OpenGL.Angle;
  using Avalonia.OpenGL.Egl;
  using Avalonia.Platform;
++using Avalonia.Reactive;
 +using Avalonia.Threading;
 +using Avalonia.Win32.DirectX;
++using Avalonia.Win32.WinRT.Composition;
  
  namespace Avalonia.Win32.OpenGl.Angle;
  
-@@ -14,11 +17,15 @@ internal sealed class D3D11AngleWin32PlatformGraphics : IPlatformGraphics, IPlat
+@@ -14,11 +19,18 @@ internal sealed class D3D11AngleWin32PlatformGraphics : IPlatformGraphics, IPlat
  {
      private readonly Win32AngleEglInterface _egl;
      private AngleWin32EglDisplay? _initialDisplay;
 +    private EglContext? _nextContext;
 +    private bool _useSoftware;
 +    private readonly TaskCompletionSource<bool> _firstFrame = new(TaskCreationOptions.RunContinuationsAsynchronously);
++    private readonly object _startupLock = new();
++    private int _hardwareDeferrals;
++    private bool _frameCommitted;
  
 -    public D3D11AngleWin32PlatformGraphics(Win32AngleEglInterface egl, AngleWin32EglDisplay? initialDisplay)
 +    public D3D11AngleWin32PlatformGraphics(Win32AngleEglInterface egl, AngleWin32EglDisplay? initialDisplay, bool useSoftware = false)
@@ -148,7 +179,7 @@ index 05cfc96..836633e 100644
      }
  
      public bool UsesSharedContext
-@@ -26,15 +33,24 @@ public bool UsesSharedContext
+@@ -26,15 +38,24 @@ public bool UsesSharedContext
  
      public IPlatformGraphicsContext CreateContext()
      {
@@ -175,20 +206,56 @@ index 05cfc96..836633e 100644
      {
          var success = false;
          try
-@@ -44,7 +60,8 @@ private static EglContext CreateContextForDisplay(AngleWin32EglDisplay display)
+@@ -44,7 +65,8 @@ private static EglContext CreateContextForDisplay(AngleWin32EglDisplay display)
                  DisposeCallback = display.Dispose,
                  ExtraFeatures = new Dictionary<Type, Func<EglContext, object>>
                  {
 -                    [typeof(IGlPlatformSurfaceRenderTargetFactory)] = _ => new AngleD3DTextureFeature(),
 +                    [typeof(IGlPlatformSurfaceRenderTargetFactory)] = _ => new AngleD3DTextureFeature(
-+                        _useSoftware ? () => _firstFrame.TrySetResult(true) : null),
++                        _useSoftware ? NotifyFallbackFrameRendered : null),
                      [typeof(IGlContextExternalObjectsFeature)] = context => new AngleExternalObjectsFeature(context)
                  }
              });
-@@ -69,12 +86,65 @@ public IGlContext CreateContext(IEnumerable<GlVersion>? versions)
+@@ -69,12 +91,101 @@ public IGlContext CreateContext(IEnumerable<GlVersion>? versions)
      IPlatformGraphicsContext IPlatformGraphics.GetSharedContext()
          => throw new InvalidOperationException();
  
++    public IDisposable DeferHardwareSwitch()
++    {
++        lock (_startupLock)
++            _hardwareDeferrals++;
++        return Disposable.Create(() =>
++        {
++            lock (_startupLock)
++            {
++                _hardwareDeferrals--;
++                TryAllowHardwareSwitch();
++            }
++        });
++    }
++
++    public void NotifyFirstFrameCommitted()
++    {
++        lock (_startupLock)
++        {
++            _frameCommitted = true;
++            TryAllowHardwareSwitch();
++        }
++    }
++
++    private void TryAllowHardwareSwitch()
++    {
++        if (_frameCommitted && _hardwareDeferrals == 0)
++            _firstFrame.TrySetResult(true);
++    }
++
++    private void NotifyFallbackFrameRendered()
++    {
++        // WinUIComposition signals its native commit separately. Other presentation backends retain the old draw fence.
++        if (AvaloniaLocator.Current.GetService<IWindowsSurfaceFactory>() is not WinUiCompositorConnection)
++            NotifyFirstFrameCommitted();
++    }
++
 +    private async Task PrepareHardwareAsync()
 +    {
 +        try
@@ -252,7 +319,7 @@ index 05cfc96..836633e 100644
              using var ctx = display.CreateContext(new EglContextOptions());
              ctx.MakeCurrent().Dispose();
          }
-@@ -86,6 +156,9 @@ IPlatformGraphicsContext IPlatformGraphics.GetSharedContext()
+@@ -86,6 +197,9 @@ IPlatformGraphicsContext IPlatformGraphics.GetSharedContext()
              return null;
          }
  
@@ -280,3 +347,251 @@ index 351b374..38afcd3 100644
      /// <summary>
      /// Gets or sets the application's DPI awareness.
      /// </summary>
+diff --git a/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositedWindowSurface.cs b/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositedWindowSurface.cs
+index 179d0c2..d35decf 100644
+--- a/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositedWindowSurface.cs
++++ b/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositedWindowSurface.cs
+@@ -1,25 +1,59 @@
+ ﻿using System;
+ using System.Diagnostics.CodeAnalysis;
++using System.Threading.Tasks;
+ using Avalonia.OpenGL.Egl;
+ using Avalonia.Platform;
+ using Avalonia.Rendering.Composition;
++using Avalonia.Reactive;
+ using Avalonia.Win32.DirectX;
+ using Avalonia.Win32.Interop;
++using Avalonia.Win32.OpenGl.Angle;
+ using MicroCom.Runtime;
+ 
+ namespace Avalonia.Win32.WinRT.Composition
+ {
+-    internal class WinUiCompositedWindowSurface : IDirect3D11TexturePlatformSurface, IDirect3D11TexturePlatformSurface2, IDisposable, ICompositionEffectsSurface
++    internal class WinUiCompositedWindowSurface : IDirect3D11TexturePlatformSurface, IDirect3D11TexturePlatformSurface2, IDisposable, ICompositionEffectsSurface, IWin32FirstFrameFeature
+     {
+         private readonly WinUiCompositionShared _shared;
+         private readonly EglGlPlatformSurface.IEglWindowGlPlatformSurfaceInfo _info;
+         private WinUiCompositedWindow? _window;
+         private BlurEffect _blurEffect;
++        private readonly D3D11AngleWin32PlatformGraphics? _graphics;
++        private readonly TaskCompletionSource<bool> _firstFrame = new(TaskCreationOptions.RunContinuationsAsynchronously);
++        private bool _firstFrameQueued;
++        private bool _disposed;
+ 
+         public WinUiCompositedWindowSurface(WinUiCompositionShared shared, EglGlPlatformSurface.IEglWindowGlPlatformSurfaceInfo info)
+         {
+             _shared = shared;
+             _info = info;
++            _graphics = AvaloniaLocator.Current.GetService<IPlatformGraphics>() as D3D11AngleWin32PlatformGraphics;
++        }
++
++        public Task FirstFrameCommitted => _firstFrame.Task;
++
++        public IDisposable DeferHardwareSwitch() => _graphics?.DeferHardwareSwitch() ?? Disposable.Empty;
++
++        private void FirstFrameDrawn()
++        {
++            lock (_shared.SyncRoot)
++            {
++                if (_disposed || _firstFrameQueued)
++                    return;
++                _firstFrameQueued = true;
++                _shared.PendingFirstFrames.Add(FirstFrameCommittedCore);
++            }
++        }
++
++        private void FirstFrameCommittedCore(Exception? error)
++        {
++            // The commit callback and Dispose are serialized by the composition lock.
++            if (_disposed)
++                return;
++            if (error != null)
++                _firstFrame.TrySetException(error);
++            else if (_firstFrame.TrySetResult(true))
++                _graphics?.NotifyFirstFrameCommitted();
+         }
+ 
+         IDirect3D11TextureRenderTarget IDirect3D11TexturePlatformSurface.CreateRenderTarget(IPlatformGraphicsContext context, IntPtr d3dDevice)
+@@ -34,13 +68,18 @@ public IDirect3D11TextureRenderTarget2 CreateRenderTarget(IPlatformGraphicsConte
+             _window ??= new WinUiCompositedWindow(_info, _shared, cornerRadius);
+             _window.SetBlur(_blurEffect);
+ 
+-            return new WinUiCompositedWindowRenderTarget(context, _window, d3dDevice, _shared.Compositor);
++            return new WinUiCompositedWindowRenderTarget(context, _window, d3dDevice, _shared.Compositor, FirstFrameDrawn);
+         }
+ 
+         public void Dispose()
+         {
+-            _window?.Dispose();
+-            _window = null;
++            lock (_shared.SyncRoot)
++            {
++                _disposed = true;
++                _firstFrame.TrySetCanceled();
++                _window?.Dispose();
++                _window = null;
++            }
+         }
+ 
+         public bool IsBlurSupported(BlurEffect effect) => effect switch
+@@ -76,13 +115,15 @@ internal class WinUiCompositedWindowRenderTarget : IDirect3D11TextureRenderTarge
+         private bool _isSurfaceSupportTransparency;
+         private ICompositionDrawingSurfaceInterop? _surfaceInterop;
+         private ICompositionDrawingSurface? _drawingSurface;
++        private readonly Action _firstFrameDrawn;
+ 
+         public WinUiCompositedWindowRenderTarget(IPlatformGraphicsContext context,
+             WinUiCompositedWindow window, IntPtr device,
+-            ICompositor compositor)
++            ICompositor compositor, Action firstFrameDrawn)
+         {
+             _context = context;
+             _window = window;
++            _firstFrameDrawn = firstFrameDrawn;
+ 
+             try
+             {
+@@ -199,7 +240,7 @@ public unsafe IDirect3D11TextureRenderTargetRenderSession BeginDraw(
+                 var offset = new PixelPoint(off.X, off.Y);
+                 using var texture = MicroComRuntime.CreateProxyFor<IUnknown>(pTexture, true);
+ 
+-                var session = new Session(_surfaceInterop, texture, transaction, _size, offset, scale);
++                var session = new Session(_surfaceInterop, texture, transaction, _size, offset, scale, _firstFrameDrawn);
+                 transaction = null;
+                 return session;
+             }
+@@ -222,9 +263,10 @@ private class Session : IDirect3D11TextureRenderTargetRenderSession
+             private readonly double _scaling;
+             private readonly ICompositionDrawingSurfaceInterop _surfaceInterop;
+             private readonly IUnknown _texture;
++            private readonly Action _firstFrameDrawn;
+ 
+             public Session(ICompositionDrawingSurfaceInterop surfaceInterop, IUnknown texture, IDisposable transaction,
+-                PixelSize size, PixelPoint offset, double scaling)
++                PixelSize size, PixelPoint offset, double scaling, Action firstFrameDrawn)
+             {
+                 _transaction = transaction;
+                 _size = size;
+@@ -232,6 +274,7 @@ public Session(ICompositionDrawingSurfaceInterop surfaceInterop, IUnknown textur
+                 _scaling = scaling;
+                 _surfaceInterop = surfaceInterop.CloneReference();
+                 _texture = texture.CloneReference();
++                _firstFrameDrawn = firstFrameDrawn;
+             }
+ 
+             public void Dispose()
+@@ -241,6 +284,7 @@ public void Dispose()
+                     _texture.Dispose();
+                     _surfaceInterop.EndDraw();
+                     _surfaceInterop.Dispose();
++                    _firstFrameDrawn();
+                 }
+                 finally
+                 {
+diff --git a/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositionShared.cs b/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositionShared.cs
+index 7a775af..acdab19 100644
+--- a/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositionShared.cs
++++ b/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositionShared.cs
+@@ -1,4 +1,5 @@
+ using System;
++using System.Collections.Generic;
+ using MicroCom.Runtime;
+ 
+ namespace Avalonia.Win32.WinRT.Composition;
+@@ -12,6 +13,8 @@ internal class WinUiCompositionShared : IDisposable
+     public ICompositionBrush? MicaBrushLight { get; }
+     public ICompositionBrush? MicaBrushDark { get; }
+     public object SyncRoot { get; } = new();
++    // Accessed only under SyncRoot. A draw is associated with the next native commit, never the previous one.
++    public List<Action<Exception?>> PendingFirstFrames { get; } = new();
+ 
+     public static readonly Version MinWinCompositionVersion = new(10, 0, 17134);
+     public static readonly Version MinAcrylicVersion = new(10, 0, 15063);
+diff --git a/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositorConnection.cs b/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositorConnection.cs
+index 2e5c0a7..c8d77be 100644
+--- a/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositorConnection.cs
++++ b/src/Windows/Avalonia.Win32/WinRT/Composition/WinUiCompositorConnection.cs
+@@ -1,4 +1,5 @@
+ ﻿using System;
++using System.Collections.Generic;
+ using System.Diagnostics;
+ using System.Runtime.InteropServices;
+ using System.Threading;
+@@ -106,6 +107,7 @@ private class RunLoopHandler : CallbackBase, IAsyncActionCompletedHandler
+         private readonly Stopwatch _st = Stopwatch.StartNew();
+         private TimeSpan? _commitDueAt;
+         private IAsyncAction? _currentCommit;
++        private readonly List<Action<Exception?>> _committingFirstFrames = new();
+         private bool _commitCompleted;
+ 
+         public RunLoopHandler(WinUiCompositorConnection parent)
+@@ -123,12 +125,36 @@ public void Invoke(IAsyncAction? asyncInfo, AsyncStatus asyncStatus)
+             }
+         }
+ 
+-        private void OnCommitCompleted()
++        private void OnCommitCompleted(bool confirmed = true)
+         {
+             Debug.Assert(Monitor.IsEntered(_parent._shared.SyncRoot), "Lock should be held");
+ 
++            Exception? commitError = null;
++            if (confirmed)
++            {
++                try
++                {
++                    _currentCommit?.GetResults();
++                }
++                catch (Exception e)
++                {
++                    commitError = e;
++                }
++            }
+             _currentCommit?.Dispose();
+             _currentCommit = null;
++            if (confirmed)
++            {
++                // Notify before another rendering tick can do unrelated work or replace the WARP resources.
++                foreach (var firstFrame in _committingFirstFrames)
++                    firstFrame(commitError);
++            }
++            else
++            {
++                // The watchdog may force progress without a completed native commit. Do not claim that a frame is ready.
++                _parent._shared.PendingFirstFrames.AddRange(_committingFirstFrames);
++            }
++            _committingFirstFrames.Clear();
+             _parent._tick?.Invoke(_st.Elapsed);
+             // Always schedule a commit so the current frame's work reaches DWM.
+             ScheduleNextCommit();
+@@ -160,6 +186,8 @@ private void ScheduleNextCommit()
+ 
+             _commitDueAt = _st.Elapsed + TimeSpan.FromSeconds(1);
+             _currentCommit = _parent._shared.Compositor5.RequestCommitAsync();
++            _committingFirstFrames.AddRange(_parent._shared.PendingFirstFrames);
++            _parent._shared.PendingFirstFrames.Clear();
+             _currentCommit.SetCompleted(this);
+         }
+ 
+@@ -187,7 +215,7 @@ public void WatchDog()
+                             "ICompositor5::RequestCommitAsync failed: {HR}, {ERR}", e.HResult, e.ToString());
+                     }
+ 
+-                    OnCommitCompleted();
++                    OnCommitCompleted(confirmed: false);
+                 }
+             }
+         }
+diff --git a/src/Windows/Avalonia.Win32/WindowImpl.cs b/src/Windows/Avalonia.Win32/WindowImpl.cs
+index fe610d9..af0a5bf 100644
+--- a/src/Windows/Avalonia.Win32/WindowImpl.cs
++++ b/src/Windows/Avalonia.Win32/WindowImpl.cs
+@@ -334,6 +334,9 @@ private set
+ 
+         public object? TryGetFeature(Type featureType)
+         {
++            if (featureType == typeof(IWin32FirstFrameFeature))
++                return _glSurface as IWin32FirstFrameFeature;
++
+             if (featureType == typeof(IScreenImpl))
+             {
+                 return Screen;

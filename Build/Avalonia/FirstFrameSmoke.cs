@@ -1,7 +1,7 @@
 #!/usr/bin/env dotnet
 #:property PublishAot=false
 #:package Avalonia.Desktop@12.1.3
-#:package Avalonia.Win32@12.1.3.1
+#:package Avalonia.Win32@12.1.3.2
 #:include ../../Source/App/Views/WindowTransitions.cs
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -10,22 +10,28 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Logging;
+using Avalonia.Platform;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Threading;
+using Avalonia.Win32;
 using UnVault.App.Views;
 
 if (!OperatingSystem.IsWindows())
     throw new PlatformNotSupportedException();
-if (args.Length != 1 || args[0] is not ("reveal" or "close-early"))
-    throw new ArgumentException("Expected reveal or close-early.");
-FirstFrameApp.CloseEarly = args[0] == "close-early";
+if (args.Length != 1 || args[0] is not ("reveal" or "hardware" or "direct-composition" or "multiple-windows" or "close-early"))
+    throw new ArgumentException("Expected reveal, hardware, direct-composition, multiple-windows, or close-early.");
+FirstFrameApp.Mode = args[0];
 int result = 1;
 var thread = new Thread(() =>
 {
     try
     {
-        result = AppBuilder.Configure<FirstFrameApp>().UsePlatformDetect()
-            .With(new Win32PlatformOptions { UseDeferredHardwareRendering = true })
+        var options = new Win32PlatformOptions { UseDeferredHardwareRendering = FirstFrameApp.Mode != "hardware" };
+        if (FirstFrameApp.Mode == "direct-composition")
+            options.CompositionMode = [Win32CompositionMode.DirectComposition];
+        Logger.Sink = new FirstFrameLog();
+        result = AppBuilder.Configure<FirstFrameApp>().UsePlatformDetect().With(options)
             .StartWithClassicDesktopLifetime([]);
     }
     catch (Exception e)
@@ -40,10 +46,12 @@ return result;
 
 sealed class FirstFrameApp : Application
 {
-    public static bool CloseEarly;
+    public static string Mode = "";
+    public static bool CloseEarly => Mode == "close-early";
     public static IntPtr WindowHandle;
     public static long DrawFinished;
-    public static int Frames, RevealedDuringDraw;
+    public static int Frames, RevealedDuringDraw, CommittedDuringDraw, Switches, EarlySwitches, RenderErrors;
+    public static IWin32FirstFrameFeature? FirstFrame;
 
     public static bool IsCloaked()
     {
@@ -58,8 +66,18 @@ sealed class FirstFrameApp : Application
         var window = new Window { Title = "First-frame reveal smoke test", Width = 360, Height = 220, Content = new SlowPaint() };
         lifetime.MainWindow = window;
         WindowHandle = window.TryGetPlatformHandle()!.Handle;
+        FirstFrame = window.PlatformImpl?.TryGetFeature<IWin32FirstFrameFeature>();
         WindowTransitions.PrepareFirstShow(window);
-        window.Opened += (_, _) => Console.WriteLine($"Opened: cloaked={IsCloaked()}");
+        window.Opened += (_, _) => Console.WriteLine($"Opened: cloaked={IsCloaked()}, nativeFence={FirstFrame is not null}");
+        Window? other = null;
+        IWin32FirstFrameFeature? otherFrame = null;
+        if (Mode == "multiple-windows")
+        {
+            other = new Window { Title = "Independent first-frame fence", Width = 240, Height = 120,
+                Content = new Border { Background = Brushes.DarkRed } };
+            otherFrame = other.PlatformImpl?.TryGetFeature<IWin32FirstFrameFeature>();
+            WindowTransitions.PrepareFirstShow(other);
+        }
         if (CloseEarly)
             DispatcherTimer.RunOnce(() => lifetime.Shutdown(0), TimeSpan.FromMilliseconds(50));
         else
@@ -73,8 +91,11 @@ sealed class FirstFrameApp : Application
                 revealed = true;
                 timer.Stop();
                 long finished = Volatile.Read(ref DrawFinished);
-                bool passed = finished != 0 && Volatile.Read(ref RevealedDuringDraw) == 0;
-                Console.WriteLine($"Revealed: frames={Frames}, earlyRevealSamples={RevealedDuringDraw}, afterDrawMs=" +
+                bool passed = finished != 0 && RevealedDuringDraw == 0 && CommittedDuringDraw == 0 &&
+                    (FirstFrame is null || FirstFrame.FirstFrameCommitted.IsCompletedSuccessfully);
+                if (otherFrame is not null)
+                    passed &= !otherFrame.FirstFrameCommitted.IsCompleted && Switches == 0;
+                Console.WriteLine($"Revealed: frames={Frames}, earlyRevealSamples={RevealedDuringDraw}, earlyCommitSamples={CommittedDuringDraw}, afterDrawMs=" +
                     (finished == 0 ? "not drawn" : Stopwatch.GetElapsedTime(finished).TotalMilliseconds.ToString("F1")));
                 if (!passed)
                 {
@@ -87,7 +108,20 @@ sealed class FirstFrameApp : Application
                     window.Show();
                     bool recloaked = IsCloaked();
                     Console.WriteLine($"Second show: cloaked={recloaked}");
-                    lifetime.Shutdown(recloaked ? 1 : 0);
+                    if (recloaked)
+                    {
+                        lifetime.Shutdown(1);
+                        return;
+                    }
+                    other?.Show();
+                    DispatcherTimer.RunOnce(() =>
+                    {
+                        bool expectedSwitch = Mode != "hardware";
+                        bool otherCommitted = otherFrame is null || otherFrame.FirstFrameCommitted.IsCompletedSuccessfully;
+                        Console.WriteLine($"Takeover: switches={Switches}, beforeReveal={EarlySwitches}, renderErrors={RenderErrors}, otherCommitted={otherCommitted}");
+                        other?.Close();
+                        lifetime.Shutdown((Switches > 0) == expectedSwitch && (FirstFrame is null || EarlySwitches == 0) && RenderErrors == 0 && otherCommitted ? 0 : 1);
+                    }, TimeSpan.FromSeconds(1.5));
                 }, TimeSpan.FromMilliseconds(100));
             };
             timer.Start();
@@ -123,10 +157,32 @@ sealed class SlowPaint : Control
                     Thread.Sleep(20); // Deliberately slow the actual render-thread draw, not the UI-thread recording pass.
                     if (!FirstFrameApp.IsCloaked())
                         Interlocked.Increment(ref FirstFrameApp.RevealedDuringDraw);
+                    if (FirstFrameApp.FirstFrame?.FirstFrameCommitted.IsCompleted == true)
+                        Interlocked.Increment(ref FirstFrameApp.CommittedDuringDraw);
                 }
             context.DrawRectangle(new ImmutableSolidColorBrush(Colors.DarkSlateBlue), null, Bounds);
             if (first)
                 Volatile.Write(ref FirstFrameApp.DrawFinished, Stopwatch.GetTimestamp());
+        }
+    }
+}
+
+sealed class FirstFrameLog : ILogSink
+{
+    public bool IsEnabled(LogEventLevel level, string area) => level >= LogEventLevel.Information;
+    public void Log(LogEventLevel level, string area, object? source, string messageTemplate) => Log(level, area, source, messageTemplate, []);
+    public void Log(LogEventLevel level, string area, object? source, string messageTemplate, params object?[] propertyValues)
+    {
+        if (messageTemplate.Contains("switched from WARP to hardware", StringComparison.Ordinal))
+        {
+            Interlocked.Increment(ref FirstFrameApp.Switches);
+            if (FirstFrameApp.IsCloaked())
+                Interlocked.Increment(ref FirstFrameApp.EarlySwitches);
+        }
+        if (level >= LogEventLevel.Error)
+        {
+            Interlocked.Increment(ref FirstFrameApp.RenderErrors);
+            Console.Error.WriteLine($"{area}: {messageTemplate} {string.Join(", ", propertyValues.Select(v => v?.ToString()))}");
         }
     }
 }

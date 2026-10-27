@@ -1,7 +1,11 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using Avalonia.Rendering.Composition;
 using Avalonia.Threading;
+using Avalonia.Win32;
 
 namespace UnVault.App.Views;
 
@@ -20,23 +24,48 @@ internal static class WindowTransitions
         if (DwmSetWindowAttribute(handle.Handle, TransitionsForceDisabled, ref disabled, sizeof(int)) < 0)
             return;
         var compositor = Compositor.TryGetDefaultCompositor();
+        var firstFrame = window.PlatformImpl?.TryGetFeature<IWin32FirstFrameFeature>();
         int cloak = 1;
         bool cloaked = compositor is not null && DwmSetWindowAttribute(handle.Handle, Cloak, ref cloak, sizeof(int)) >= 0;
+        // The native device may prepare concurrently, but resource replacement must wait for this window's reveal.
+        var hardwareDeferral = cloaked ? firstFrame?.DeferHardwareSwitch() : null;
+        var closed = new CancellationTokenSource();
+        bool opened = false;
         window.Opened += RevealFirstFrame;
+        window.Closed += OnClosed;
+
+        void OnClosed(object? sender, EventArgs e)
+        {
+            closed.Cancel();
+            hardwareDeferral?.Dispose();
+            if (!opened)
+            {
+                window.Opened -= RevealFirstFrame;
+                window.Closed -= OnClosed;
+                closed.Dispose();
+            }
+        }
 
         async void RevealFirstFrame(object? sender, EventArgs e)
         {
+            opened = true;
             window.Opened -= RevealFirstFrame;
             try
             {
                 if (cloaked)
                 {
-                    await compositor!.RequestCompositionBatchCommitAsync().Rendered.ConfigureAwait(false);
-                    // WinUIComposition queues its native commit after the rendering callback returns.
-                    // A second rendering turn crosses that boundary before we flush the queued DWM work.
-                    await Dispatcher.UIThread.InvokeAsync(() => compositor.RequestCompositionBatchCommitAsync().Rendered).ConfigureAwait(false);
-                    await Task.Run(DwmFlush).ConfigureAwait(false);
-                    await Dispatcher.UIThread.InvokeAsync(() => SetIfAlive(Cloak, 0)).GetTask().ConfigureAwait(false);
+                    if (firstFrame is not null)
+                        await firstFrame.FirstFrameCommitted.WaitAsync(closed.Token).ConfigureAwait(false);
+                    else
+                    {
+                        // Non-WinUI backends do not expose a native commit fence; retain the conservative fallback.
+                        await compositor!.RequestCompositionBatchCommitAsync().Rendered.WaitAsync(closed.Token).ConfigureAwait(false);
+                        await Dispatcher.UIThread.InvokeAsync(() => compositor.RequestCompositionBatchCommitAsync().Rendered)
+                            .WaitAsync(closed.Token).ConfigureAwait(false);
+                        await Task.Run(DwmFlush).ConfigureAwait(false);
+                    }
+                    await Dispatcher.UIThread.InvokeAsync(() => SetIfAlive(Cloak, 0), DispatcherPriority.Send, closed.Token)
+                        .GetTask().ConfigureAwait(false);
                 }
                 // Keep transitions disabled until DWM has consumed the reveal, without blocking the UI thread.
                 await Task.Run(DwmFlush).ConfigureAwait(false);
@@ -45,13 +74,20 @@ internal static class WindowTransitions
             {
                 // Dispatcher shutdown can abort the queued operation when the window closes during startup.
             }
+            catch (Exception ex)
+            {
+                Trace.TraceError("Could not wait for the initial window frame: {0}", ex);
+            }
             finally
             {
+                hardwareDeferral?.Dispose();
                 Dispatcher.UIThread.Post(() =>
                 {
+                    window.Closed -= OnClosed;
                     if (cloaked)
                         SetIfAlive(Cloak, 0);
                     SetIfAlive(TransitionsForceDisabled, 0);
+                    closed.Dispose();
                 });
             }
         }

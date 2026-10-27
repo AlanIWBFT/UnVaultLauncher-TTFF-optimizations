@@ -1,6 +1,6 @@
 #:property PublishAot=false
 #:package Avalonia.Desktop@12.1.3
-#:package Avalonia.Win32@12.1.3.1
+#:package Avalonia.Win32@12.1.3.2
 using System.Collections.Concurrent;
 using Avalonia;
 using Avalonia.Controls;

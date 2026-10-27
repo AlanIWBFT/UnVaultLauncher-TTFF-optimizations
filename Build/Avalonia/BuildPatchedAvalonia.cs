@@ -4,10 +4,11 @@ using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 
 const string revision = "8eeda4f6f546165b3f72e63c9f42247abb306905";
-const string version = "12.1.3.1";
+const string version = "12.1.3.2";
 string scriptDirectory = Path.GetDirectoryName(SourceFile())!;
 string root = Path.GetFullPath(Path.Combine(scriptDirectory, "../.."));
-string source = args.Length == 1 ? Path.GetFullPath(args[0]) : Path.Combine(root, "Bin", "dependencies", "Avalonia");
+// Keep each patch revision in its own checkout instead of rewriting an older, possibly modified source tree.
+string source = args.Length == 1 ? Path.GetFullPath(args[0]) : Path.Combine(root, "Bin", "dependencies", $"Avalonia-{version}");
 string patch = Path.Combine(scriptDirectory, "deferred-d3d11.patch");
 string feed = Path.Combine(root, "Bin", "packages");
 Directory.CreateDirectory(Path.GetDirectoryName(source)!);

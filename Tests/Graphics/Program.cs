@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -7,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Themes.Fluent;
 using SkiaSharp;
 using UnVault.App.Browser;
+using UnVault.App.Views;
 
 internal static class Program
 {
@@ -70,13 +72,18 @@ internal sealed class SmokeApp : Application
         var desktop = (IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!;
         var scene = new Scene();
         var window = new Window { Title = "UnVault static graphics check: " + Program.Mode, Width = 640, Height = 360, Content = scene };
+        Program.Log.WindowHandle = window.TryGetPlatformHandle()!.Handle;
+        WindowTransitions.PrepareFirstShow(window);
         desktop.MainWindow = window;
         window.Opened += async (_, _) =>
         {
             try
             {
                 if (Program.Mode == "deferred")
+                {
                     await Program.Log.HardwareReady.Task.WaitAsync(TimeSpan.FromSeconds(20));
+                    if (GraphicsLog.IsCloaked(Program.Log.WindowHandle)) throw new Exception("Hardware takeover preceded the window reveal.");
+                }
                 for (int i = 0; i < 12; i++)
                 {
                     window.Width = 640 + i * 5;
@@ -138,12 +145,25 @@ internal sealed class GraphicsLog : ILogSink
 {
     public readonly TaskCompletionSource HardwareReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public string? Error;
+    public IntPtr WindowHandle;
+    public static bool IsCloaked(IntPtr window)
+    {
+        Marshal.ThrowExceptionForHR(DwmGetWindowAttribute(window, 14, out int flags, sizeof(int)));
+        return (flags & 1) != 0;
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetWindowAttribute(IntPtr window, int attribute, out int value, int size);
     public bool IsEnabled(LogEventLevel level, string area) => area == "OpenGL" || level >= LogEventLevel.Error;
     public void Log(LogEventLevel level, string area, object? source, string messageTemplate) => Log(level, area, source, messageTemplate, []);
     public void Log(LogEventLevel level, string area, object? source, string messageTemplate, params object?[] propertyValues)
     {
         Console.WriteLine($"[{level}] {area}: {messageTemplate} {string.Join("; ", propertyValues)}");
-        if (messageTemplate == "Deferred rendering switched from WARP to hardware.") HardwareReady.TrySetResult();
+        if (messageTemplate == "Deferred rendering switched from WARP to hardware.")
+        {
+            if (IsCloaked(WindowHandle)) Error = "Hardware takeover occurred while the startup window was cloaked.";
+            HardwareReady.TrySetResult();
+        }
         if (level >= LogEventLevel.Error || messageTemplate.Contains("Deferred hardware initialization failed", StringComparison.Ordinal))
         {
             Error = messageTemplate;

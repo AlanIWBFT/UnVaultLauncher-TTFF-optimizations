@@ -5,11 +5,15 @@
 
 - Other minor tweaks.
 
+- The window is revealed after its first successful native composition commit, rather than waiting for another Avalonia render pass. WARP-to-hardware resource replacement is held until the window has been revealed.
+
 ## Build
 
 Requires .NET 10, Visual Studio 2022 or later with the Desktop development with C++ workload, PowerShell 7, LLVM (`llvm-ar` and `lld-link`), and GitHub CLI (`gh`).
 
 Run `build_release_app.bat`. It builds the patched Avalonia Windows backend, then publishes `UnVaultLauncher.exe` to the repository root. LLVM is expected in `%ProgramFiles%\LLVM\bin` or on PATH. For direct `dotnet publish Source/App -p:PublishProfile=win-x64`, build the patched backend first and put LLVM on PATH.
+
+The backend helper uses a separate source checkout under `Bin/dependencies/Avalonia-<patched-package-version>` for each patch revision, leaving older checkouts untouched. The patch and package references must be updated together.
 
 The EXE runs without adjacent application DLLs or a .NET installation. Embedded sign-in still requires the installed WebView2 Runtime. Static graphics binaries come from the pinned `StaticLink.Avalonia` package; the patched Avalonia backend and deferred WARP-to-hardware rendering remain in use.
 
