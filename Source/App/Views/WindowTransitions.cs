@@ -20,13 +20,14 @@ internal static class WindowTransitions
         if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND" } handle)
             return;
 
+        IntPtr hwnd = handle.Handle;
         int disabled = 1;
-        if (DwmSetWindowAttribute(handle.Handle, TransitionsForceDisabled, ref disabled, sizeof(int)) < 0)
+        if (DwmSetWindowAttribute(hwnd, TransitionsForceDisabled, ref disabled, sizeof(int)) < 0)
             return;
         var compositor = Compositor.TryGetDefaultCompositor();
         var firstFrame = window.PlatformImpl?.TryGetFeature<IWin32FirstFrameFeature>();
         int cloak = 1;
-        bool cloaked = compositor is not null && DwmSetWindowAttribute(handle.Handle, Cloak, ref cloak, sizeof(int)) >= 0;
+        bool cloaked = compositor is not null && DwmSetWindowAttribute(hwnd, Cloak, ref cloak, sizeof(int)) >= 0;
         // The native device may prepare concurrently, but resource replacement must wait for this window's reveal.
         var hardwareDeferral = cloaked ? firstFrame?.DeferHardwareSwitch() : null;
         var closed = new CancellationTokenSource();
@@ -55,7 +56,14 @@ internal static class WindowTransitions
                 if (cloaked)
                 {
                     if (firstFrame is not null)
+                    {
                         await firstFrame.FirstFrameCommitted.WaitAsync(closed.Token).ConfigureAwait(false);
+                        // WM_PAINT can synchronously wait for a later render batch on the UI thread. Reveal the
+                        // already-committed frame using only its captured HWND, without queuing behind that wait.
+                        closed.Token.ThrowIfCancellationRequested();
+                        int visible = 0;
+                        DwmSetWindowAttribute(hwnd, Cloak, ref visible, sizeof(int));
+                    }
                     else
                     {
                         // Non-WinUI backends do not expose a native commit fence; retain the conservative fallback.
@@ -63,9 +71,9 @@ internal static class WindowTransitions
                         await Dispatcher.UIThread.InvokeAsync(() => compositor.RequestCompositionBatchCommitAsync().Rendered)
                             .WaitAsync(closed.Token).ConfigureAwait(false);
                         await Task.Run(DwmFlush).ConfigureAwait(false);
+                        await Dispatcher.UIThread.InvokeAsync(() => SetIfAlive(Cloak, 0), DispatcherPriority.Send, closed.Token)
+                            .GetTask().ConfigureAwait(false);
                     }
-                    await Dispatcher.UIThread.InvokeAsync(() => SetIfAlive(Cloak, 0), DispatcherPriority.Send, closed.Token)
-                        .GetTask().ConfigureAwait(false);
                 }
                 // Keep transitions disabled until DWM has consumed the reveal, without blocking the UI thread.
                 await Task.Run(DwmFlush).ConfigureAwait(false);
@@ -94,8 +102,8 @@ internal static class WindowTransitions
 
         void SetIfAlive(int attribute, int value)
         {
-            if (window.TryGetPlatformHandle()?.Handle == handle.Handle)
-                DwmSetWindowAttribute(handle.Handle, attribute, ref value, sizeof(int));
+            if (window.TryGetPlatformHandle()?.Handle == hwnd)
+                DwmSetWindowAttribute(hwnd, attribute, ref value, sizeof(int));
         }
     }
 

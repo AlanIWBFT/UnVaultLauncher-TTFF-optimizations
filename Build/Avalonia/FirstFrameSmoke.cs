@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Logging;
 using Avalonia.Platform;
+using Avalonia.Rendering.Composition;
 using Avalonia.Rendering.SceneGraph;
 using Avalonia.Threading;
 using Avalonia.Win32;
@@ -19,8 +20,8 @@ using UnVault.App.Views;
 
 if (!OperatingSystem.IsWindows())
     throw new PlatformNotSupportedException();
-if (args.Length != 1 || args[0] is not ("reveal" or "hardware" or "direct-composition" or "multiple-windows" or "close-early"))
-    throw new ArgumentException("Expected reveal, hardware, direct-composition, multiple-windows, or close-early.");
+if (args.Length != 1 || args[0] is not ("reveal" or "busy-ui" or "hardware" or "direct-composition" or "multiple-windows" or "close-before-show" or "close-early"))
+    throw new ArgumentException("Expected reveal, busy-ui, hardware, direct-composition, multiple-windows, close-before-show, or close-early.");
 FirstFrameApp.Mode = args[0];
 int result = 1;
 var thread = new Thread(() =>
@@ -52,6 +53,7 @@ sealed class FirstFrameApp : Application
     public static long DrawFinished;
     public static int Frames, RevealedDuringDraw, CommittedDuringDraw, Switches, EarlySwitches, RenderErrors;
     public static IWin32FirstFrameFeature? FirstFrame;
+    public static readonly ManualResetEventSlim FirstDrawStarted = new(false);
 
     public static bool IsCloaked()
     {
@@ -77,6 +79,17 @@ sealed class FirstFrameApp : Application
                 Content = new Border { Background = Brushes.DarkRed } };
             otherFrame = other.PlatformImpl?.TryGetFeature<IWin32FirstFrameFeature>();
             WindowTransitions.PrepareFirstShow(other);
+        }
+        if (Mode == "close-before-show")
+        {
+            lifetime.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            var neverShown = new Window { Title = "Closed before its first show" };
+            var unusedFrame = neverShown.PlatformImpl?.TryGetFeature<IWin32FirstFrameFeature>();
+            WindowTransitions.PrepareFirstShow(neverShown);
+            neverShown.Close();
+            if (unusedFrame is not null && !unusedFrame.FirstFrameCommitted.IsCanceled)
+                throw new InvalidOperationException("Closing an unshown window did not cancel its first-frame fence.");
+            Console.WriteLine("Closed before show: first-frame wait canceled; hardware deferral must not block the main window.");
         }
         if (CloseEarly)
             DispatcherTimer.RunOnce(() => lifetime.Shutdown(0), TimeSpan.FromMilliseconds(50));
@@ -124,7 +137,48 @@ sealed class FirstFrameApp : Application
                     }, TimeSpan.FromSeconds(1.5));
                 }, TimeSpan.FromMilliseconds(100));
             };
-            timer.Start();
+            if (Mode == "busy-ui")
+            {
+                window.Opened += BlockUiOnFirstOpen;
+                void BlockUiOnFirstOpen(object? sender, EventArgs e)
+                {
+                    window.Opened -= BlockUiOnFirstOpen;
+                    // Queue a real frame before blocking the UI dispatcher, as SyncCommit does during WM_PAINT.
+                    _ = Compositor.TryGetDefaultCompositor()!.RequestCompositionBatchCommitAsync();
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        try
+                        {
+                            if (FirstFrame is null || !FirstDrawStarted.Wait(TimeSpan.FromSeconds(2)))
+                                throw new InvalidOperationException("The native first-frame draw did not start.");
+                            bool initiallyCloaked = IsCloaked();
+                            bool initiallyCommitted = FirstFrame.FirstFrameCommitted.IsCompleted;
+                            var blocked = Stopwatch.StartNew();
+                            bool revealedWhileBlocked = Task.Run(async () =>
+                            {
+                                await FirstFrame.FirstFrameCommitted.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+                                var timeout = Stopwatch.StartNew();
+                                while (IsCloaked() && timeout.Elapsed < TimeSpan.FromSeconds(1))
+                                    Thread.Sleep(2);
+                                return !IsCloaked();
+                            }).GetAwaiter().GetResult();
+                            Console.WriteLine($"Busy UI: initiallyCloaked={initiallyCloaked}, initiallyCommitted={initiallyCommitted}, " +
+                                $"revealedWhileBlocked={revealedWhileBlocked}, blockedMs={blocked.Elapsed.TotalMilliseconds:F1}");
+                            if (!initiallyCloaked || initiallyCommitted || !revealedWhileBlocked)
+                                lifetime.Shutdown(1);
+                            else
+                                timer.Start();
+                        }
+                        catch (Exception e)
+                        {
+                            Console.Error.WriteLine(e);
+                            lifetime.Shutdown(1);
+                        }
+                    }, DispatcherPriority.Background);
+                }
+            }
+            else
+                timer.Start();
             DispatcherTimer.RunOnce(() =>
             {
                 Console.Error.WriteLine($"Timed out: frames={Frames}, cloaked={IsCloaked()}");
@@ -151,6 +205,8 @@ sealed class SlowPaint : Control
         public void Render(ImmediateDrawingContext context)
         {
             bool first = Interlocked.Increment(ref FirstFrameApp.Frames) == 1;
+            if (first)
+                FirstFrameApp.FirstDrawStarted.Set();
             if (first && !FirstFrameApp.CloseEarly)
                 for (int i = 0; i < 10; i++)
                 {

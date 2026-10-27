@@ -24,10 +24,12 @@ Build `Build/Avalonia/FirstFrameSmoke.cs` with `dotnet build Build/Avalonia/Firs
 
 ```
 dotnet run --file Build/Avalonia/FirstFrameSmoke.cs -c Release --no-build -- reveal
+dotnet run --file Build/Avalonia/FirstFrameSmoke.cs -c Release --no-build -- busy-ui
 dotnet run --file Build/Avalonia/FirstFrameSmoke.cs -c Release --no-build -- hardware
 dotnet run --file Build/Avalonia/FirstFrameSmoke.cs -c Release --no-build -- direct-composition
 dotnet run --file Build/Avalonia/FirstFrameSmoke.cs -c Release --no-build -- multiple-windows
+dotnet run --file Build/Avalonia/FirstFrameSmoke.cs -c Release --no-build -- close-before-show
 dotnet run --file Build/Avalonia/FirstFrameSmoke.cs -c Release --no-build -- close-early
 ```
 
-These deliberately delay the first render-thread draw, verify that neither native commit readiness nor the reveal is reported during that draw, check hide/show and shutdown, and exercise per-window fences and hardware deferral across multiple windows. The WinUIComposition backend exposes a native commit fence; other presentation backends retain the conservative two-render-turn fallback. The fence confirms native submission, not physical display scan-out.
+These deliberately delay the first render-thread draw, verify that neither native commit readiness nor the reveal is reported during that draw, check hide/show and shutdown, and exercise per-window fences and hardware deferral across multiple windows. `busy-ui` additionally blocks the UI dispatcher before the first native commit and requires the window to become uncloaked while that dispatcher is still blocked. The WinUIComposition backend exposes a native commit fence; other presentation backends retain the conservative two-render-turn fallback. The fence confirms native submission, not physical display scan-out.
