@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Xml.Linq;
 
 const string revision = "8eeda4f6f546165b3f72e63c9f42247abb306905";
-const string version = "12.1.3.2";
+const string version = "12.1.3.3";
 string scriptDirectory = Path.GetDirectoryName(SourceFile())!;
 string root = Path.GetFullPath(Path.Combine(scriptDirectory, "../.."));
 // Keep each patch revision in its own checkout instead of rewriting an older, possibly modified source tree.
@@ -43,7 +43,7 @@ new XDocument(new XElement("package",
         new XElement("id", "Avalonia.Win32"), new XElement("version", version),
         new XElement("authors", "Avalonia Team; UnVault contributors"),
         new XElement("license", new XAttribute("type", "expression"), "MIT"),
-        new XElement("description", "Avalonia 12.1.3 Windows backend with opt-in deferred hardware rendering for UnVault."),
+        new XElement("description", "Avalonia 12.1.3 Windows backend with deferred hardware rendering, first-frame synchronization and optional WARP program caching for UnVault."),
         new XElement("dependencies", new XElement("group", new XAttribute("targetFramework", "net10.0"),
             new XElement("dependency", new XAttribute("id", "Avalonia"), new XAttribute("version", "[12.1.3]")),
             new XElement("dependency", new XAttribute("id", "Avalonia.Angle.Windows.Natives"), new XAttribute("version", "[2.1.27548.20260419]"))))),

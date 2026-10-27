@@ -7,6 +7,8 @@
 
 - The window is revealed after its first successful native composition commit, rather than waiting for another Avalonia render pass. WARP-to-hardware resource replacement is held until the window has been revealed.
 
+- WARP shader-program binaries are cached locally in `%LOCALAPPDATA%\UnVaultLauncher\graphics\warp-programs-v1.bin`. ANGLE checks environment compatibility; misses or rejected binaries are recompiled and replace the cached result. Rendering callbacks only access memory, and background persistence starts after the first frame is revealed. The cache is bounded to 128 entries / 4 MiB of payload, with oldest compiled entries evicted. Hardware rendering does not use this cache. Set `UNVAULT_WARP_CACHE=0` to disable it for startup comparisons. No prebuilt cache is bundled.
+
 ## Build
 
 Requires .NET 10, Visual Studio 2022 or later with the Desktop development with C++ workload, PowerShell 7, LLVM (`llvm-ar` and `lld-link`), and GitHub CLI (`gh`).

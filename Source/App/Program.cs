@@ -26,11 +26,17 @@ sealed class Program
             return;
         }
         Instance = instance;
+        using var shaderCache = Environment.GetEnvironmentVariable("UNVAULT_WARP_CACHE") == "0" ||
+            Environment.GetEnvironmentVariable("UNVAULT_RENDERING") == "hardware" ? null :
+            new Services.WarpProgramCache(System.IO.Path.Combine(Core.AppPaths.DataDirectory, "graphics", "warp-programs-v1.bin"));
+        ShaderCache = shaderCache;
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
     /// <summary>This copy, the running one; App shows the window when the app is started again.</summary>
     internal static Services.SingleInstance? Instance { get; private set; }
+
+    internal static Services.WarpProgramCache? ShaderCache { get; private set; }
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
@@ -47,7 +53,7 @@ sealed class Program
     private static Win32PlatformOptions CreateGraphicsOptions()
     {
         string? mode = Environment.GetEnvironmentVariable("UNVAULT_RENDERING");
-        var options = new Win32PlatformOptions { UseDeferredHardwareRendering = mode is not ("warp" or "hardware") };
+        var options = new Win32PlatformOptions { UseDeferredHardwareRendering = mode is not ("warp" or "hardware"), WarpProgramCache = ShaderCache };
         if (mode == "warp")
         {
             options.RenderingMode = [Win32RenderingMode.AngleEgl];

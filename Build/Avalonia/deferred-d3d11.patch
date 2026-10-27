@@ -1,3 +1,23 @@
+diff --git a/src/Windows/Avalonia.Win32/IWin32AngleProgramCache.cs b/src/Windows/Avalonia.Win32/IWin32AngleProgramCache.cs
+new file mode 100644
+index 0000000..c080816
+--- /dev/null
++++ b/src/Windows/Avalonia.Win32/IWin32AngleProgramCache.cs
+@@ -0,0 +1,14 @@
++using System;
++
++namespace Avalonia.Win32;
++
++/// <summary>Storage for opaque ANGLE shader-program binaries. ANGLE supplies and validates compatibility keys.</summary>
++public interface IWin32AngleProgramCache
++{
++    /// <summary>Returns an immutable cached binary, or empty memory on a miss. Called from native rendering threads.</summary>
++    ReadOnlyMemory<byte> Load(ReadOnlySpan<byte> key);
++
++    /// <summary>Copies a newly compiled binary into storage. Native memory is only valid during this call.</summary>
++    /// <remarks>Do not perform file I/O or call back into EGL here; defer persistence until after the first frame.</remarks>
++    void Store(ReadOnlySpan<byte> key, ReadOnlySpan<byte> binary);
++}
 diff --git a/src/Windows/Avalonia.Win32/IWin32FirstFrameFeature.cs b/src/Windows/Avalonia.Win32/IWin32FirstFrameFeature.cs
 new file mode 100644
 index 0000000..483a569
@@ -78,8 +98,106 @@ index f2e2f27..36da6dc 100644
          }
          catch (COMException com)
          {
+diff --git a/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleEglProgramCache.cs b/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleEglProgramCache.cs
+new file mode 100644
+index 0000000..1832aff
+--- /dev/null
++++ b/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleEglProgramCache.cs
+@@ -0,0 +1,92 @@
++using System;
++using System.Runtime.InteropServices;
++using Avalonia.OpenGL.Egl;
++using Avalonia.Win32.DirectX;
++using MicroCom.Runtime;
++using static Avalonia.OpenGL.Egl.EglConsts;
++
++namespace Avalonia.Win32.OpenGl.Angle;
++
++internal sealed unsafe class AngleEglProgramCache
++{
++    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
++    private delegate void SetBlob(IntPtr key, nint keySize, IntPtr value, nint valueSize);
++    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
++    private delegate nint GetBlob(IntPtr key, nint keySize, IntPtr value, nint valueSize);
++
++    private readonly IWin32AngleProgramCache _cache;
++    private readonly SetBlob _set;
++    private readonly GetBlob _get;
++    private bool _failed;
++
++    private AngleEglProgramCache(IWin32AngleProgramCache cache)
++    {
++        _cache = cache;
++        _set = Store;
++        _get = Load;
++    }
++
++    public static AngleEglProgramCache? TryAttach(EglInterface egl, IntPtr display, ID3D11Device device)
++    {
++        var cache = AvaloniaLocator.Current.GetService<Win32PlatformOptions>()?.WarpProgramCache;
++        if (cache == null)
++            return null;
++        try
++        {
++            using var dxgiDevice = device.QueryInterface<IDXGIDevice>();
++            using var adapter = dxgiDevice.Adapter;
++            using var adapter1 = adapter.QueryInterface<IDXGIAdapter1>();
++            // DXGI_ADAPTER_FLAG_SOFTWARE: fixed WARP mode is covered too, but hardware takeover is not.
++            if ((adapter1.Desc1.Flags & 2) == 0 ||
++                egl.QueryString(display, EGL_EXTENSIONS)?.Contains("EGL_ANDROID_blob_cache") != true)
++                return null;
++            IntPtr address;
++            fixed (byte* name = "eglSetBlobCacheFuncsANDROID\0"u8)
++                address = egl.GetProcAddress((IntPtr)name);
++            if (address == IntPtr.Zero)
++                return null;
++            var binding = new AngleEglProgramCache(cache);
++            ((delegate* unmanaged[Stdcall]<IntPtr, IntPtr, IntPtr, void>)address)(display,
++                Marshal.GetFunctionPointerForDelegate(binding._set), Marshal.GetFunctionPointerForDelegate(binding._get));
++            return binding;
++        }
++        catch (Exception)
++        {
++            // Caching is optional; an unavailable extension/provider must not disable rendering.
++            return null;
++        }
++    }
++
++    private nint Load(IntPtr key, nint keySize, IntPtr value, nint valueSize)
++    {
++        if (_failed || keySize <= 0 || keySize > 128 || valueSize < 0)
++            return 0;
++        try
++        {
++            var binary = _cache.Load(new ReadOnlySpan<byte>((void*)key, (int)keySize));
++            if (value != IntPtr.Zero && valueSize >= binary.Length)
++                binary.Span.CopyTo(new Span<byte>((void*)value, binary.Length));
++            // EGL first queries the size, then requests a copy. An undersized destination is not written.
++            return binary.Length;
++        }
++        catch (Exception)
++        {
++            _failed = true;
++            return 0;
++        }
++    }
++
++    private void Store(IntPtr key, nint keySize, IntPtr value, nint valueSize)
++    {
++        if (_failed || keySize <= 0 || keySize > 128 || valueSize <= 0 || valueSize > int.MaxValue)
++            return;
++        try
++        {
++            _cache.Store(new ReadOnlySpan<byte>((void*)key, (int)keySize), new ReadOnlySpan<byte>((void*)value, (int)valueSize));
++        }
++        catch (Exception)
++        {
++            _failed = true;
++        }
++    }
++}
 diff --git a/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleWin32EglDisplay.cs b/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleWin32EglDisplay.cs
-index afee6ef..31eecd7 100644
+index afee6ef..733c8b2 100644
 --- a/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleWin32EglDisplay.cs
 +++ b/src/Windows/Avalonia.Win32/OpenGl/Angle/AngleWin32EglDisplay.cs
 @@ -51,6 +51,12 @@ public static AngleWin32EglDisplay CreateSharedD3D11Display(EglInterface egl)
@@ -115,7 +233,7 @@ index afee6ef..31eecd7 100644
                      IntPtr.Zero, 0, featureLevels, (uint)featureLevels.Length,
                      7, out pD3dDevice, out _, null);
  
-@@ -143,7 +151,12 @@ public static unsafe AngleWin32EglDisplay CreateD3D11Display(Win32AngleEglInterf
+@@ -143,21 +151,29 @@ public static unsafe AngleWin32EglDisplay CreateD3D11Display(Win32AngleEglInterf
              if (pD3dDevice == IntPtr.Zero)
                  throw new Win32Exception("Unable to create D3D11 Device");
  
@@ -128,8 +246,17 @@ index afee6ef..31eecd7 100644
 +            var d3dDevice = device.CloneReference();
              var angleDevice = IntPtr.Zero;
              var display = IntPtr.Zero;
++            AngleEglProgramCache? programCache = null;
  
-@@ -157,7 +170,7 @@ void Cleanup()
+             void Cleanup()
+             {
+                 if (angleDevice != IntPtr.Zero)
+                     egl.ReleaseDeviceANGLE(angleDevice);
+                 d3dDevice.Dispose();
++                // eglTerminate has returned before this callback; native callbacks can no longer use these delegates.
++                GC.KeepAlive(programCache);
+             }
+ 
              bool success = false;
              try
              {
@@ -138,6 +265,14 @@ index afee6ef..31eecd7 100644
                  if (angleDevice == IntPtr.Zero)
                      throw OpenGlException.GetFormattedException("eglCreateDeviceANGLE", egl);
  
+@@ -169,6 +185,7 @@ void Cleanup()
+                 var rv = new AngleWin32EglDisplay(display, egl,
+                     GetDisplayOptions(egl, () => d3dDevice.DeviceRemovedReason != 0, Cleanup),
+                     AngleOptions.PlatformApi.DirectX11);
++                programCache = AngleEglProgramCache.TryAttach(egl, display, d3dDevice);
+                 success = true;
+                 return rv;
+             }
 diff --git a/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs b/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs
 index 05cfc96..40da106 100644
 --- a/src/Windows/Avalonia.Win32/OpenGl/Angle/D3D11AngleWin32PlatformGraphics.cs
@@ -331,10 +466,28 @@ index 05cfc96..40da106 100644
      }
  }
 diff --git a/src/Windows/Avalonia.Win32/Win32PlatformOptions.cs b/src/Windows/Avalonia.Win32/Win32PlatformOptions.cs
-index 351b374..38afcd3 100644
+index 351b374..53e2a12 100644
 --- a/src/Windows/Avalonia.Win32/Win32PlatformOptions.cs
 +++ b/src/Windows/Avalonia.Win32/Win32PlatformOptions.cs
-@@ -165,6 +165,12 @@ public class Win32PlatformOptions
+@@ -2,6 +2,7 @@
+ using System.Collections.Generic;
+ using Avalonia.OpenGL;
+ using Avalonia.Platform;
++using Avalonia.Win32;
+ 
+ namespace Avalonia;
+ 
+@@ -101,6 +102,9 @@ public enum Win32CompositionMode
+ /// </summary>
+ public class Win32PlatformOptions
+ {
++    /// <summary>Optional program-binary cache for WARP D3D11 displays. Hardware displays do not use this provider.</summary>
++    public IWin32AngleProgramCache? WarpProgramCache { get; set; }
++
+     /// <summary>
+     /// Embeds popups to the window when set to true. The default value is false.
+     /// </summary>
+@@ -165,6 +169,12 @@ public class Win32PlatformOptions
      /// </summary>
      public IPlatformGraphics? CustomPlatformGraphics { get; set; }
  

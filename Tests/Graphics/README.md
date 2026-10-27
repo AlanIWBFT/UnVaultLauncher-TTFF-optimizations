@@ -18,6 +18,21 @@ UnVault.Graphics.Smoke.exe hardware
 
 The check round-trips a JPEG and exercises truncated-image decoder recovery, displays a small animated window with shaped text, and resizes it. Only ANGLE rendering is allowed; software-renderer fallback is an error. Deferred mode additionally requires the patched backend's successful WARP-to-hardware switch and checks that it follows the window reveal. Finally it opens a local page in an embedded WebView2 and executes JavaScript, checking that both static native stacks work in the same process. No account or screenshots are used. Hardware and deferred modes require a working hardware adapter. Run on a desktop session, not a headless CI host.
 
+## WARP program-cache checks
+
+After publishing, run these **sequentially** with a fresh, isolated temporary folder. Do not use the application's real cache:
+
+```
+UnVault.Graphics.Smoke.exe cache-cold C:\Temp\unvault-cache-check\warp.bin
+UnVault.Graphics.Smoke.exe cache-warm C:\Temp\unvault-cache-check\warp.bin
+UnVault.Graphics.Smoke.exe cache-reject C:\Temp\unvault-cache-check\warp.bin
+UnVault.Graphics.Smoke.exe cache-warm C:\Temp\unvault-cache-check\warp.bin
+UnVault.Graphics.Smoke.exe cache-hardware C:\Temp\unvault-cache-check\warp.bin
+UnVault.Graphics.Smoke.exe cache-deferred C:\Temp\unvault-cache-check\deferred.bin
+```
+
+These exercise the actual NativeAOT callbacks: cold compilation and persistence, cross-process hits without recompilation, ANGLE rejection of corrupted binary payloads followed by replacement and a successful warm run, hardware exclusion, and WARP-to-hardware disposal. Forced garbage collections during rendering check callback rooting. File-format, bounds, delayed persistence and concurrent-storage checks are in `Tests/App/WarpProgramCacheTests.cs`.
+
 ## First-frame fence checks
 
 Build `Build/Avalonia/FirstFrameSmoke.cs` with `dotnet build Build/Avalonia/FirstFrameSmoke.cs -c Release`, then run these modes serially:

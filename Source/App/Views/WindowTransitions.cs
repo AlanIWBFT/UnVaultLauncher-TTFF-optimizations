@@ -15,7 +15,7 @@ internal static class WindowTransitions
     private const int Cloak = 13;
 
     /// <summary>Reveal the first rendered frame without a DWM transition, then restore normal window behavior.</summary>
-    public static void PrepareFirstShow(Window window)
+    public static void PrepareFirstShow(Window window, Action? onRevealed = null)
     {
         if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND" } handle)
             return;
@@ -77,6 +77,7 @@ internal static class WindowTransitions
                 }
                 // Keep transitions disabled until DWM has consumed the reveal, without blocking the UI thread.
                 await Task.Run(DwmFlush).ConfigureAwait(false);
+                onRevealed?.Invoke();
             }
             catch (OperationCanceledException)
             {
