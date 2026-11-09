@@ -21,6 +21,7 @@ sealed class Program
             return;
         }
         Instance = instance;
+        using var timerResolution = Services.TimerResolution.RequestOneMillisecond();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
