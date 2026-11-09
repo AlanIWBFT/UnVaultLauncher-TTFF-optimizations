@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Source/App/Browser/*.cs" Link="Browser/%(Filename)%(Extension)" />
+    <Compile Include="../../Source/App/Views/NativeWindowBackground.cs" Link="NativeWindowBackground.cs" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
     <PackageReference Include="Avalonia.Win32" Version="12.1.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -8,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Themes.Fluent;
 using SkiaSharp;
 using UnVault.App.Browser;
+using UnVault.App.Views;
 
 internal static class Program
 {
@@ -56,7 +58,10 @@ internal sealed class SmokeApp : Application
     {
         var desktop = (IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!;
         var scene = new Scene();
-        var window = new Window { Title = "UnVault Skia software check", Width = 640, Height = 360, Content = scene };
+        var window = new Window { Title = "UnVault Skia software check", Width = 640, Height = 360,
+            Background = new SolidColorBrush(Color.FromRgb(0x14, 0x14, 0x14)), Content = scene };
+        NativeWindowBackground.Apply(window);
+        CheckNativeBackground(window);
         desktop.MainWindow = window;
         window.Opened += async (_, _) =>
         {
@@ -106,6 +111,29 @@ internal sealed class SmokeApp : Application
             throw new Exception("Embedded browser script check failed.");
         Console.WriteLine("PASS: static graphics and WebView2 in one executable");
     }
+
+    private static void CheckNativeBackground(Window window)
+    {
+        IntPtr brush = GetClassLongPtr(window.TryGetPlatformHandle()!.Handle, -10);
+        if (brush == IntPtr.Zero || GetObject(brush, Marshal.SizeOf<BrushInfo>(), out var info) != Marshal.SizeOf<BrushInfo>() ||
+            info.Style != 0 || info.Color != 0x00141414)
+            throw new Exception("Native background brush does not match #141414 before the first frame.");
+        Console.WriteLine("PASS: native background brush is #141414 before the first frame");
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BrushInfo
+    {
+        public uint Style;
+        public uint Color;
+        public UIntPtr Hatch;
+    }
+
+    [DllImport("user32.dll", EntryPoint = "GetClassLongPtrW")]
+    private static extern IntPtr GetClassLongPtr(IntPtr window, int index);
+
+    [DllImport("gdi32.dll", EntryPoint = "GetObjectW")]
+    private static extern int GetObject(IntPtr value, int size, out BrushInfo info);
 }
 
 internal sealed class Scene : Control
