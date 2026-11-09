@@ -1,0 +1,16 @@
+<Project>
+  <!-- Source-generated COM works with NativeAOT; only the official native loader is needed. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" GeneratePathProperty="true" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <_WebView2Arch>x64</_WebView2Arch>
+    <_WebView2Arch Condition="'$(RuntimeIdentifier)' == 'win-arm64' or '$(PlatformTarget)' == 'ARM64'">arm64</_WebView2Arch>
+    <_WebView2Arch Condition="'$(RuntimeIdentifier)' == 'win-x86' or '$(PlatformTarget)' == 'x86'">x86</_WebView2Arch>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="$(PkgMicrosoft_Web_WebView2)/runtimes/win-$(_WebView2Arch)/native/WebView2Loader.dll" Link="WebView2Loader.dll"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

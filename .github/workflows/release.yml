@@ -1,9 +1,9 @@
-# Builds UnVaultLauncher.exe and puts it in a draft release, for a person to check and publish.
+# Builds the Native AOT app ZIP and puts it in a draft release, for a person to check and publish.
 # Release: set <Version> in Directory.Build.props, push, then Actions > Release > Run workflow.
 # The draft keeps the commit it was built from; GitHub tags that commit (e.g. v0.3.1) when the release is published.
 # Building runs other people's code (NuGet packages, the tests), so that job can only read the repository. The two small
-# jobs around it run none of that: one checks the version, the other records where the exe was built (a signed
-# attestation; the exe itself isn't code-signed) and makes the draft.
+# jobs around it run none of that: one checks the version, the other records where the ZIP was built (a signed
+# attestation; the executable itself isn't code-signed) and makes the draft.
 # Actions are pinned to a commit, not a tag: a tag can be moved to other code, a commit can't. Dependabot proposes updates.
 name: Release
 
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Only build and test, without making a release (the exe is kept as a download of the run)
+        description: Only build and test, without making a release (the ZIP is kept as a download of the run)
         type: boolean
         default: false
 
@@ -74,21 +74,23 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Build
+        run: dotnet build UnVault.sln -c Release -warnaserror
+
       - name: Test
-        run: dotnet test UnVault.sln -c Release
+        run: dotnet test UnVault.sln -c Release --no-build
 
       - name: Publish
         shell: pwsh
         run: |
-          dotnet publish Source/App -p:PublishProfile=win-x64
+          dotnet publish Source/App -p:PublishProfile=win-x64 -warnaserror
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # A missing profile is only a warning to dotnet publish; it then builds something else, without the exe.
-          if (-not (Test-Path UnVaultLauncher.exe)) { throw "The publish didn't produce UnVaultLauncher.exe; see its warnings above." }
+          if (-not (Test-Path UnVaultLauncher-win-x64.zip)) { throw "The publish didn't produce UnVaultLauncher-win-x64.zip; see its warnings above." }
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: UnVaultLauncher
-          path: UnVaultLauncher.exe
+          path: UnVaultLauncher-win-x64.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -113,25 +115,25 @@ jobs:
       - name: Release notes
         shell: pwsh
         run: |
-          $hash = (Get-FileHash UnVaultLauncher.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $hash = (Get-FileHash UnVaultLauncher-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
           # The release's own story goes above this, written in the draft before publishing.
           @"
           ***
-          **Download** ``UnVaultLauncher.exe`` below: one file, nothing to install, for 64-bit Windows 10 or 11.
+          **Download** ``UnVaultLauncher-win-x64.zip`` below. Extract all files and run ``UnVaultLauncher.exe``, keeping the DLLs beside it. For 64-bit Windows 10 (1809+) or Windows 11; no .NET installation needed. Embedded sign-in uses the WebView2 Runtime.
           Not code-signed yet, so Windows may warn on first run: choose **More info**, then **Run anyway**.
 
           **SHA-256** ``$hash``
-          **Built by GitHub Actions from this repository.** To check: ``gh attestation verify UnVaultLauncher.exe --repo $env:GITHUB_REPOSITORY``
+          **Built by GitHub Actions from this repository.** To check: ``gh attestation verify UnVaultLauncher-win-x64.zip --repo $env:GITHUB_REPOSITORY``
           "@ | Out-File notes.md -Encoding utf8
 
-      # A signed record that the exe came from this workflow and commit (checked with gh attestation verify).
+      # A signed record that the ZIP came from this workflow and commit (checked with gh attestation verify).
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: UnVaultLauncher.exe
+          subject-path: UnVaultLauncher-win-x64.zip
 
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
-          gh release create "$env:TAG" UnVaultLauncher.exe --draft --target "$env:GITHUB_SHA"
+          gh release create "$env:TAG" UnVaultLauncher-win-x64.zip --draft --target "$env:GITHUB_SHA"
           --title "UnVault Launcher $env:VERSION" --notes-file notes.md --repo "$env:GITHUB_REPOSITORY"

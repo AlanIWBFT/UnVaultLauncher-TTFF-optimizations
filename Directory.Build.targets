@@ -1,15 +1,48 @@
 <Project>
-  <!-- We host WebView2 through its core API only; its WPF/WinForms wrappers would drag in WindowsBase conflicts.
-       Lives here so projects that get WebView2 transitively (the app's tests) drop them too. -->
-  <Target Name="DropWebView2UIWrappers" BeforeTargets="ResolveAssemblyReferences">
-    <ItemGroup>
-      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf' Or '%(Filename)' == 'Microsoft.Web.WebView2.WinForms'" />
-    </ItemGroup>
-  </Target>
-
   <!-- Publish profiles can set CopyExeTo to put the finished exe somewhere handy (win-x64: the repository root). -->
   <Target Name="CopyPublishedExe" AfterTargets="Publish" Condition="'$(CopyExeTo)' != ''">
     <Copy SourceFiles="$(PublishDir)$(AssemblyName).exe" DestinationFolder="$(CopyExeTo)" />
     <Message Importance="high" Text="$(Product) -&gt; $([System.IO.Path]::GetFullPath('$(CopyExeTo)$(AssemblyName).exe'))" />
+  </Target>
+
+  <!-- ZipDirectory has no exclusion filter. Filter the actual files too, because publish directories can
+       contain symbols left by older builds, outside the current ResolvedFileToPublish list. -->
+  <UsingTask TaskName="ZipPublishedAppWithoutSymbols" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <SourceDirectory ParameterType="System.String" Required="true" />
+      <DestinationFile ParameterType="System.String" Required="true" />
+      <ExcludedFileNames ParameterType="System.String[]" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.IO.Compression" />
+      <Using Namespace="System.Linq" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        var root = Path.GetFullPath(SourceDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var destination = Path.GetFullPath(DestinationFile);
+        Directory.CreateDirectory(Path.GetDirectoryName(destination));
+        using (var stream = File.Create(destination))
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
+        {
+            foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).OrderBy(path => path, StringComparer.Ordinal))
+            {
+                if (string.Equals(Path.GetExtension(file), ".pdb", StringComparison.OrdinalIgnoreCase) ||
+                    (ExcludedFileNames != null && ExcludedFileNames.Contains(Path.GetFileName(file), StringComparer.OrdinalIgnoreCase)) ||
+                    string.Equals(file, destination, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var entry = archive.CreateEntry(file.Substring(root.Length).Replace('\\', '/'), CompressionLevel.Optimal);
+                entry.LastWriteTime = File.GetLastWriteTime(file);
+                using (var input = File.OpenRead(file))
+                using (var output = entry.Open())
+                    input.CopyTo(output);
+            }
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <!-- Native AOT's native dependencies stay beside the executable, with no extraction at startup. -->
+  <Target Name="ArchivePublishedApp" AfterTargets="Publish" Condition="'$(PublishArchive)' != ''">
+    <ZipPublishedAppWithoutSymbols SourceDirectory="$(PublishDir)" DestinationFile="$(PublishArchive)" ExcludedFileNames="$(PublishArchiveExclude)" />
   </Target>
 </Project>

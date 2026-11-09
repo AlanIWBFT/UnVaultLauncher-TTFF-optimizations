@@ -485,6 +485,7 @@ $RECYCLE.BIN/
 /Tools/
 /UnVaultLauncher.exe
 /UnVaultLauncher-CLI.exe
-# The single-file publish settings (no secrets in them); the template above ignores every .pubxml
+/UnVaultLauncher-win-x64.zip
+# Publish settings (no secrets in them); the template above ignores every .pubxml
 !/Source/App/Properties/PublishProfiles/win-x64.pubxml
 !/Source/CLI/Properties/PublishProfiles/win-x64.pubxml
