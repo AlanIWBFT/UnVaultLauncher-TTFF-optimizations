@@ -2,7 +2,7 @@
 
 A lightweight Windows launcher for managing Unreal Engine installations, projects, and Fab assets and plugins.
 
-This fork of [UnVault Launcher](https://github.com/skxdoom/UnVaultLauncher) focuses on startup performance using .NET 10 NativeAOT.
+This fork of [UnVault Launcher](https://github.com/skxdoom/UnVaultLauncher) focuses on startup performance with .NET 10 NativeAOT. Skia, HarfBuzz, ANGLE and the WebView2 Loader are statically linked into a single executable.
 
 ## Run
 
@@ -10,18 +10,25 @@ This fork of [UnVault Launcher](https://github.com/skxdoom/UnVaultLauncher) focu
 - No .NET installation required.
 - The installed Microsoft Edge WebView2 Runtime is required for embedded Epic sign-in.
 
-Extract `UnVaultLauncher-win-x64.zip` and run `UnVaultLauncher.exe`. Keep the EXE and all accompanying DLLs in the same folder.
+Run `UnVaultLauncher.exe`; no accompanying application DLLs are needed.
 
 ## Build
 
-Requires the .NET 10 SDK and Visual Studio 2022 or later with the **Desktop development with C++** workload.
+Requires:
+
+- .NET 10 SDK.
+- Visual Studio 2022 or later with the **Desktop development with C++** workload.
+- PowerShell 7.
+- LLVM, including `llvm-ar` and `lld-link`.
+
+Install LLVM under `%ProgramFiles%\LLVM`, or make its tools available on `PATH`.
 
 From a Visual Studio Developer Shell in the repository root:
 
 ```powershell
-dotnet publish Source/App -p:PublishProfile=win-x64
+.\build_release_app.bat
 ```
 
-The release archive is written to `UnVaultLauncher-win-x64.zip` in the repository root.
+The executable is written to `UnVaultLauncher.exe` in the repository root.
 
 Developer check: [WebView2](Tests/Browser/README.md).
