@@ -11,10 +11,13 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        using var instance = Services.SingleInstance.Claim();
+        string instanceName = Services.SingleInstance.DefaultName;
+        if (Environment.GetEnvironmentVariable("UNVAULT_COMPARE") == "1")
+            instanceName += ".Compare.Software";
+        using var instance = Services.SingleInstance.Claim(instanceName);
         if (instance is null)
         {
-            Services.SingleInstance.ShowRunning();
+            Services.SingleInstance.ShowRunning(instanceName);
             return;
         }
         Instance = instance;
@@ -28,6 +31,7 @@ sealed class Program
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
+            .With(new Win32PlatformOptions { RenderingMode = [Win32RenderingMode.Software] })
 #if DEBUG
             .WithDeveloperTools()
 #endif

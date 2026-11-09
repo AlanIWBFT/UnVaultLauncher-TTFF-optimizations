@@ -3,6 +3,25 @@
   <Import Project="$(PkgStaticLink_Avalonia)/buildTransitive/StaticLink.Avalonia.props" Condition="Exists('$(PkgStaticLink_Avalonia)/buildTransitive/StaticLink.Avalonia.props')" />
   <Import Project="$(PkgStaticLink_Avalonia)/buildTransitive/StaticLink.Avalonia.targets" Condition="Exists('$(PkgStaticLink_Avalonia)/buildTransitive/StaticLink.Avalonia.targets')" />
 
+  <!-- Reuse the pinned Skia/HarfBuzz archives and CRT integration, not the package's ANGLE integration. -->
+  <ItemGroup>
+    <DirectPInvoke Remove="libGLESv2;av_libglesv2" />
+  </ItemGroup>
+  <Target Name="StaticLinkAvaloniaAddWindowsDirectPInvokes" BeforeTargets="WriteIlcRspFileForCompilation"
+          Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' == 'win-x64'">
+    <ItemGroup>
+      <DirectPInvoke Include="libHarfBuzzSharp;libHarfBuzzSharp.dll;libSkiaSharp;libSkiaSharp.dll" />
+    </ItemGroup>
+  </Target>
+  <Target Name="StaticLinkAvaloniaAddWindowsNativeLibraries" />
+  <Target Name="ExcludeAngleNativeLibraries" BeforeTargets="SetupOSSpecificProps" DependsOnTargets="StaticLinkAvaloniaAddZigRuntime"
+          Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' == 'win-x64'">
+    <ItemGroup>
+      <NativeLibrary Remove="$(_StaticLinkAvaloniaNativeRoot)/libGLESv2_static.lib;$(_StaticLinkAvaloniaNativeRoot)/libANGLE_static.lib;$(_StaticLinkAvaloniaNativeRoot)/libEGL_static.lib" />
+      <LinkerArg Remove="d3d9.lib;d3d11.lib;d3d12.lib;d3dcompiler.lib;dxguid.lib;dxgi.lib" />
+    </ItemGroup>
+  </Target>
+
   <!-- The package's constructor fix is necessary for its Zig-built libc++. Use PowerShell 7 without policy overrides. -->
   <Target Name="StaticLinkAvaloniaPrepareCppInitializers" BeforeTargets="StaticLinkAvaloniaAddZigRuntime"
           Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' == 'win-x64' and Exists('$(_StaticLinkAvaloniaNativeRoot)/zig-runtime/c++.lib')">

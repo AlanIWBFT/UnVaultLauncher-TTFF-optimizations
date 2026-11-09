@@ -11,7 +11,7 @@
         Background="{StaticResource WindowBackgroundBrush}">
 
     <!-- At its narrowest, three Library tiles a row: 3 tiles, 2 of the least gaps between them, the page's side margins -->
-    <Grid>
+    <Grid x:Name="WindowRoot">
         <Grid RowDefinitions="Auto,Auto,Auto,*">
 
             <!-- Header -->

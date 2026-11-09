@@ -2,7 +2,7 @@
 
 A lightweight Windows launcher for managing Unreal Engine installations, projects, and Fab assets and plugins.
 
-This fork of [UnVault Launcher](https://github.com/skxdoom/UnVaultLauncher) focuses on startup performance with .NET 10 NativeAOT. Skia, HarfBuzz, ANGLE and the WebView2 Loader are statically linked into a single executable.
+This fork of [UnVault Launcher](https://github.com/skxdoom/UnVaultLauncher) focuses on startup performance and memory usage with .NET 10 NativeAOT and Skia CPU rendering for the main interface. Skia, HarfBuzz and the WebView2 Loader are statically linked into a single executable.
 
 ## Run
 
@@ -31,4 +31,4 @@ From a Visual Studio Developer Shell in the repository root:
 
 The executable is written to `UnVaultLauncher.exe` in the repository root.
 
-Developer check: [WebView2](Tests/Browser/README.md).
+Developer checks: [software rendering](Tests/Graphics/README.md), [WebView2](Tests/Browser/README.md).
